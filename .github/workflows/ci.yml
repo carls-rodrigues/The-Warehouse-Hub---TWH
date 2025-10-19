@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-openapi:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Spectral
+      run: npm install -g @stoplight/spectral-cli
+
+    - name: Validate OpenAPI Schema
+      run: spectral lint inventory-openapi.yaml --ruleset .spectral.yaml
+
+    - name: Check OpenAPI Examples
+      run: |
+        # Validate that examples don't contain actual secrets (not template placeholders)
+        # Look for patterns that suggest real secrets rather than documentation
+        if grep -r -E "(password|secret).*[^<>]" docs/quickstart/ --include="*.md" --include="*.txt" | grep -v "<" | grep -v ">" | grep -v "template" | grep -v "placeholder" | grep -v "your_key_here" | grep -v "returned from" | grep -v "environment variable"; then
+          echo "❌ Potential secrets found in quickstart files"
+          exit 1
+        else
+          echo "✅ No secrets found in quickstart documentation"
+        fi
+
+  test-contracts:
+    runs-on: ubuntu-latest
+    needs: validate-openapi
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Prism
+      run: npm install -g @stoplight/prism-cli
+
+    - name: Generate Postman Collection
+      run: |
+        # Install openapi-to-postman
+        npm install -g openapi-to-postmanv2
+
+        # Generate Postman collection
+        openapi-to-postmanv2 convert \
+          --input inventory-openapi.yaml \
+          --output docs/quickstart/twh-api.postman_collection.json \
+          --pretty
+
+    - name: Validate Generated Collection
+      run: |
+        # Check that collection was generated
+        if [ ! -f docs/quickstart/twh-api.postman_collection.json ]; then
+          echo "Postman collection not generated"
+          exit 1
+        fi
+
+        # Validate JSON structure
+        jq . docs/quickstart/twh-api.postman_collection.json > /dev/null
+
+    - name: Mock API Server Test
+      run: |
+        # Start Prism mock server in background
+        prism mock inventory-openapi.yaml --host 0.0.0.0 --port 4010 &
+        MOCK_PID=$!
+
+        # Wait for server to start
+        sleep 5
+
+        # Test basic endpoints
+        curl -f http://localhost:4010/healthz || exit 1
+
+        # Stop mock server
+        kill $MOCK_PID
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [validate-openapi, test-contracts]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: actions/setup-rust@v1
+      with:
+        rust-version: stable
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Run tests
+      run: cargo test --verbose

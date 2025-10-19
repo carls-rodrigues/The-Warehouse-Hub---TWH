@@ -1,0 +1,66 @@
+extends: spectral:oas
+rules:
+  # Custom rules for TWH API
+  operation-description:
+    description: Operations must have a description
+    given: $.paths.*.*.description
+    then:
+      function: truthy
+
+  parameter-description:
+    description: Parameters must have descriptions
+    given: $.paths.*.*.parameters[*].description
+    then:
+      function: truthy
+
+  response-description:
+    description: Responses must have descriptions
+    given: $.paths.*.*.responses.*.description
+    then:
+      function: truthy
+
+  # Security requirements
+  security-requirements:
+    description: All operations must have security requirements
+    given: $.paths.*.*
+    then:
+      function: truthy
+      field: security
+
+  # TWH specific validations
+  twh-headers:
+    description: Operations should use standard TWH headers
+    given: $.paths.*.*
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          properties:
+            parameters:
+              type: array
+              contains:
+                oneOf:
+                  - properties: { name: { const: "Idempotency-Key" } }
+                  - properties: { name: { const: "X-Tenant-ID" } }
+                  - properties: { name: { const: "If-Match" } }
+
+  # Error response format
+  error-responses:
+    description: All operations must define error responses
+    given: $.paths.*.*
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [responses]
+          properties:
+            responses:
+              type: object
+              required: ["400", "401", "403", "500"]
+              properties:
+                "400": { type: object }
+                "401": { type: object }
+                "403": { type: object }
+                "500": { type: object }
