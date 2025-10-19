@@ -1,0 +1,2200 @@
+{
+  "task_breakdown": [
+    {
+      "task_id": "TASK-001",
+      "requirement_id": "REQ-001",
+      "component": "Domain API Layer / CI",
+      "title": "Integrate existing OpenAPI into CI and validate contracts",
+      "description": "Adopt the existing inventory-openapi.yaml as the canonical OpenAPI v3 spec, add contract tests to CI, and generate a Postman collection and quickstart artifacts.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Canonical OpenAPI spec available at repo root as inventory-openapi.yaml",
+          "CI contract tests run on each PR and fail on breaking changes",
+          "Postman collection and example quickstart requests generated and published to docs/quickstart",
+          "Sample responses and example data included for sandbox tenants"
+        ],
+        "implementation_details": [
+          "Adopt inventory-openapi.yaml as canonical and remove duplicate specs",
+          "Use Spectral + openapi-validator in GitHub Actions to validate schema and enforce semantic rules",
+          "Add contract-smoke tests (Dredd or Prism) in CI that run against sandbox/staging",
+          "Add a CI check to ensure generated artifacts (Postman collection) match committed versions to prevent drift"
+        ],
+        "testing_requirements": [
+          "Unit: validate OpenAPI schema passes spectral rules",
+          "Integration: run a smoke test against staging/sandbox using the Postman collection",
+          "CI: contract validator step fails PR on schema contract change"
+        ],
+        "security_considerations": [
+          "Do not commit secrets in the OpenAPI examples",
+          "Examples must use demo sandbox credentials or placeholders",
+          "Validate examples do not leak PII"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 8,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "OpenAPI",
+          "CI",
+          "GitHub Actions",
+          "docs"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [],
+        "blocks": [
+          "TASK-002",
+          "TASK-018"
+        ],
+        "can_parallel": [
+          "TASK-006"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#api_specification",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "inventory-openapi.yaml present in repo root",
+        "CI contract tests pass in GitHub Actions",
+        "Postman collection published to docs/quickstart",
+        "PR reviewed and merged"
+      ]
+    },
+    {
+      "task_id": "TASK-002",
+      "requirement_id": "REQ-009",
+      "component": "Admin / DevEx Console",
+      "title": "Sandbox tenant provisioning and quickstart flow",
+      "description": "Implement sandbox tenant creation flow, seed sample data, and publish a quickstart script that completes an end-to-end create->append->read->webhook flow within 10 minutes.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Sandbox provisioning API provisions a sandbox tenant in <60s",
+          "Seeded data contains sample tenant, user, items, location and a webhook subscription",
+          "Quickstart script executes and completes first successful API call within 10 minutes in a fresh environment",
+          "Admin UI shows sandbox tenant and ability to revoke/renew sandbox keys"
+        ],
+        "implementation_details": [
+          "Create POST /admin/sandbox that creates tenant, user, API key, sample items and sample webhook; persist with tenant flag 'sandbox'",
+          "Use fixtures stored in /docs/quickstart/fixtures to seed the tenant",
+          "Provide CLI `npx twh-quickstart` that runs the sample flows using Node SDK or curl scripts",
+          "Automate cleanup policy that retires sandbox tenants after 30 days"
+        ],
+        "testing_requirements": [
+          "E2E test: sandbox provisioning completes and the quickstart flow succeeds in CI against a disposable sandbox environment",
+          "Unit: admin API returns 200 and created resources are queryable",
+          "Integration: webhook dispatch observed for seeded subscription"
+        ],
+        "security_considerations": [
+          "Sandbox tenants have strict quotas and no access to billing APIs",
+          "Sandbox secrets rotated and shown once; store encrypted in DB"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-2",
+        "skillset_required": [
+          "Node.js|Rust",
+          "DevEx",
+          "CI"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-003",
+          "TASK-012"
+        ],
+        "can_parallel": [
+          "TASK-004"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_overview, #api_specification",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Quickstart script passes in CI",
+        "Sandbox appears in Admin UI",
+        "Sample webhook delivered and visible in DLQ UI"
+      ]
+    },
+    {
+      "task_id": "TASK-003",
+      "requirement_id": "REQ-002",
+      "component": "Domain API Layer / Items",
+      "title": "Implement Items CRUD endpoints with ETag support",
+      "description": "Implement POST/GET/PUT/DELETE for items with server-generated ETag and If-Match enforcement on updates.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /items creates item and returns 201 with ETag header",
+          "GET /items returns item with ETag header",
+          "PUT /items/{id} requires If-Match header; on mismatch returns 412",
+          "DELETE /items/{id} returns 204 and archived flag set",
+          "Idempotency-Key accepted on POSTs and dedupes duplicate creates"
+        ],
+        "implementation_details": [
+          "Store items in Postgres items table; generate ETag as version integer or hash of updated_at",
+          "Implement idempotency insert for POST using unique (tenant_id, idempotency_key) or idempotency table",
+          "Validate inputs via OpenAPI-generated validators",
+          "Return standard error model"
+        ],
+        "testing_requirements": [
+          "Unit: CRUD operations work with ETag semantics",
+          "Integration: concurrent updates produce 412 on stale ETag",
+          "Integration: repeated POST with same Idempotency-Key results in single item"
+        ],
+        "security_considerations": [
+          "Sanitize metadata JSONB fields to prevent injection",
+          "Ensure only authorized tenants/users can operate on resources"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 20,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres",
+          "ETag handling"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-004",
+          "TASK-005"
+        ],
+        "can_parallel": [
+          "TASK-006"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Domain API Layer, data_model",
+        "api_spec": "inventory-openapi.yaml#POST /items",
+        "related_code": [
+          "src/items"
+        ]
+      },
+      "definition_of_done": [
+        "All acceptance criteria met",
+        "Unit and integration tests passing",
+        "Docs updated"
+      ]
+    },
+    {
+      "task_id": "TASK-004",
+      "requirement_id": "REQ-003",
+      "component": "Command Service / Reconciliation",
+      "title": "Implement ledger append (stock_movements) and stock_levels snapshot transaction",
+      "description": "Implement append-only stock movement persistence with atomic snapshot updates to stock_levels and write outbox rows in same transaction.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /stock_movements appends immutable stock_movement rows",
+          "Stock_levels are updated transactionally in same DB TX",
+          "Outbox row created in same TX for each movement",
+          "Idempotency-key prevents duplicate movement creation"
+        ],
+        "implementation_details": [
+          "Command Service exposes AppendMovements RPC consumed by Domain API",
+          "Use Postgres transaction: insert into stock_movement, upsert stock_level, insert outbox",
+          "Ensure stock_movement rows are append-only with immutable constraints",
+          "Partition stock_movement by tenant_id (and time) for performance"
+        ],
+        "testing_requirements": [
+          "Integration: simulate duplicate requests and assert single row insertion",
+          "Integration: simulate TX failure and assert no partial state (no stock_level change)",
+          "Load test: measure write throughput and latencies"
+        ],
+        "security_considerations": [
+          "Validate idempotency key ownership by tenant",
+          "Limit batch sizes to prevent transaction blowups"
+        ]
+      },
+      "estimation": {
+        "complexity": "L",
+        "estimated_hours": 48,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-3",
+        "skillset_required": [
+          "Rust",
+          "DB TX",
+          "CQRS",
+          "Kafka basics"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-003",
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-005",
+          "TASK-006",
+          "TASK-007"
+        ],
+        "can_parallel": []
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Command Service, data_model, api_specification",
+        "api_spec": "inventory-openapi.yaml#POST /stock_movements",
+        "related_code": [
+          "src/commands"
+        ]
+      },
+      "definition_of_done": [
+        "All acceptance criteria met",
+        "Integration tests for TX atomicity",
+        "Performance benchmark results"
+      ]
+    },
+    {
+      "task_id": "TASK-005",
+      "requirement_id": "REQ-005",
+      "component": "API Layer / Idempotency",
+      "title": "Implement Idempotency store & Redis fallback",
+      "description": "Build idempotency storage using Redis for fast dedupe and Postgres fallback for durability; integrate into write flows.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Requests with same Idempotency-Key return single persisted resource",
+          "Redis cache used for high throughput checks; fallback to DB ensures correctness on Redis miss/outage",
+          "TTL and retention policy documented",
+          "Idempotency is enforced across retries for both single and batched writes"
+        ],
+        "implementation_details": [
+          "Design idempotency table in Postgres with unique constraint (tenant_id, idempotency_key)",
+          "Use Redis SETNX with a short lock TTL before processing; if Redis is unavailable, rely on DB unique insert pattern",
+          "Store result pointer (resource id and status) in idempotency entries to return cached response",
+          "Expire idempotency keys per configured retention (default 30 days)"
+        ],
+        "testing_requirements": [
+          "Unit: idempotency key insert logic",
+          "Integration: Redis outage scenario uses DB fallback and still dedupes",
+          "Load: concurrency tests ensuring no duplicate inserts under heavy retries"
+        ],
+        "security_considerations": [
+          "Validate that idempotency keys are scoped to tenant_id to avoid cross-tenant leakage",
+          "Do not log idempotency keys in plaintext in prod logs"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-3",
+        "skillset_required": [
+          "Redis",
+          "Postgres",
+          "Race conditions"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004"
+        ],
+        "blocks": [
+          "TASK-006"
+        ],
+        "can_parallel": [
+          "TASK-008"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#api_specification, #command_service",
+        "api_spec": "inventory-openapi.yaml#headers: Idempotency-Key",
+        "related_code": [
+          "src/idempotency"
+        ]
+      },
+      "definition_of_done": [
+        "Idempotency tests pass",
+        "Failover tested in CI",
+        "Documentation updated"
+      ]
+    },
+    {
+      "task_id": "TASK-006",
+      "requirement_id": "REQ-006",
+      "component": "Webhook Dispatcher",
+      "title": "Implement webhook dispatcher with DLQ and replay API",
+      "description": "Consume events from Kafka, deliver to subscriber URLs with HMAC signing, implement retry/backoff, DLQ storage and admin replay APIs.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Webhook dispatcher consumes events and attempts delivery to subscriber URLs",
+          "On transient failures, retries with exponential backoff and jitter up to N attempts",
+          "Permanent failures land in DLQ with error details and can be replayed by admin API",
+          "Each delivery is signed with X-TWH-Signature using per-subscriber secret"
+        ],
+        "implementation_details": [
+          "Use Kafka consumer with partitions aligned to tenant sharding to ensure ordering per tenant",
+          "Delivery workers use per-subscriber rate limits via Redis token bucket",
+          "Store DLQ entries in Postgres (or S3 for large payloads) with metadata and last_error",
+          "Provide POST /admin/webhooks/{id}/replay that reads DLQ and enqueues delivery"
+        ],
+        "testing_requirements": [
+          "Integration: simulate transient HTTP failures and verify backoff/resume",
+          "Integration: simulate permanent failures and DLQ entry creation",
+          "E2E: admin replay re-delivers payload and updates DLQ status"
+        ],
+        "security_considerations": [
+          "Protect replay API with RBAC and audit logs",
+          "Encrypt stored webhook secrets and use them only for signing"
+        ]
+      },
+      "estimation": {
+        "complexity": "L",
+        "estimated_hours": 40,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Kafka",
+          "HTTP retries",
+          "Security"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-005"
+        ],
+        "blocks": [
+          "TASK-012"
+        ],
+        "can_parallel": [
+          "TASK-010"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Webhook Dispatcher",
+        "api_spec": "inventory-openapi.yaml#webhooks",
+        "related_code": [
+          "src/webhooks"
+        ]
+      },
+      "definition_of_done": [
+        "All ACs implemented",
+        "DLQ replay tested",
+        "Secrets stored encrypted"
+      ]
+    },
+    {
+      "task_id": "TASK-007",
+      "requirement_id": "REQ-007",
+      "component": "Jobs Service",
+      "title": "Implement Jobs API and worker framework",
+      "description": "Add jobs API for imports/exports and long-running tasks; build worker pool that stores artifacts in S3 and reports status back to jobs table.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /jobs accepts job and returns 202 with job_id",
+          "Workers pick up queued jobs, process them and update job status",
+          "Artifacts stored in S3 with signed URLs for download",
+          "Job owner can query job progress and errors via GET /jobs/{id}"
+        ],
+        "implementation_details": [
+          "Use Kafka or Redis queue for job dispatch; implement worker idempotency for retries",
+          "Store job metadata in Postgres and artifacts in S3/MinIO",
+          "Provide job priority and tenant quota checks before enqueue",
+          "Integrate with Metering to count usage for billing"
+        ],
+        "testing_requirements": [
+          "Integration: end-to-end job enqueue → processing → artifact retrieval",
+          "Failure injection: worker crash and resume ensures job eventually completes or marks failed",
+          "Security: signed URL expiry verified"
+        ],
+        "security_considerations": [
+          "Limit uploaded artifact sizes and scan for malware in uploads if possible",
+          "Ensure tenant isolation for job artifacts"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 40,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-5",
+        "skillset_required": [
+          "Background workers",
+          "S3",
+          "Postgres"
+        ],
+        "priority": "P1"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001",
+          "TASK-004"
+        ],
+        "blocks": [
+          "TASK-011"
+        ],
+        "can_parallel": [
+          "TASK-008",
+          "TASK-009"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Jobs Service",
+        "api_spec": "inventory-openapi.yaml#POST /jobs",
+        "related_code": [
+          "src/jobs"
+        ]
+      },
+      "definition_of_done": [
+        "Jobs API available",
+        "Workers process jobs reliably",
+        "Artifacts retrievable via signed URLs"
+      ]
+    },
+    {
+      "task_id": "TASK-008",
+      "requirement_id": "REQ-008",
+      "component": "Projection Workers / Search",
+      "title": "Build projection pipeline and search indexing",
+      "description": "Consume domain events and build read-optimized tables plus update search index (Meili/ES) for POS read patterns.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Projection workers consume Kafka events and update read DB within acceptable lag",
+          "Search index reflects recent changes within configurable TTL (<5s for high priority tenants; <30s default)",
+          "POS read p95 < 100ms under expected baseline load"
+        ],
+        "implementation_details": [
+          "Implement consumer groups with partition affinity; maintain projection checkpoint per consumer",
+          "Write to read-optimized Postgres tables for stock_levels and to search index for queries",
+          "Provide metrics and alerts for projection lag",
+          "Support rebuild from outbox in case of corruption"
+        ],
+        "testing_requirements": [
+          "Integration: projection durability after Kafka consumer restart",
+          "Performance: verify read p95 under simulated load",
+          "Chaos: simulate out-of-order events and validate idempotent projection updates"
+        ],
+        "security_considerations": [
+          "Ensure projections don't leak cross-tenant data",
+          "Secure search access with API keys for internal services only"
+        ]
+      },
+      "estimation": {
+        "complexity": "L",
+        "estimated_hours": 56,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-3",
+        "skillset_required": [
+          "Kafka",
+          "ETL",
+          "Search",
+          "DB tuning"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-009",
+          "TASK-010"
+        ],
+        "can_parallel": [
+          "TASK-002"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Projection Workers, Search Service",
+        "api_spec": "n/a",
+        "related_code": [
+          "src/projections"
+        ]
+      },
+      "definition_of_done": [
+        "Projection pipeline operating",
+        "Read p95 goals met",
+        "Rebuild tested"
+      ]
+    },
+    {
+      "task_id": "TASK-009",
+      "requirement_id": "REQ-010",
+      "component": "Metering & Billing",
+      "title": "Implement event-sourced metering pipeline and billing exports",
+      "description": "Consume usage events, aggregate for billing, provide admin exports and billing dashboard; include reconciliation jobs.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Usage events captured for API calls and jobs",
+          "Daily billing aggregates produced and exportable",
+          "Reconciliation job reports discrepancies and variance <1%",
+          "Admin UI lists billing per tenant and invoice generation"
+        ],
+        "implementation_details": [
+          "Emit usage events from API gateway and workers to Kafka 'usage' topic",
+          "Consumers aggregate usage into billing tables and produce daily batches for invoice generation",
+          "Implement reconciliation job that compares usage aggregates vs raw events",
+          "Provide CSV and API export endpoints for billing data"
+        ],
+        "testing_requirements": [
+          "Integration: end-to-end usage capture to invoice generation",
+          "Reconciliation: synthetic data testing to verify variance thresholds",
+          "Security: protect billing endpoints with RBAC"
+        ],
+        "security_considerations": [
+          "Protect customer billing data; encrypt PII at rest",
+          "Audit billing exports"
+        ]
+      },
+      "estimation": {
+        "complexity": "L",
+        "estimated_hours": 60,
+        "confidence": "low"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-6",
+        "skillset_required": [
+          "Data pipelines",
+          "Kafka",
+          "BI"
+        ],
+        "priority": "P1"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001",
+          "TASK-004"
+        ],
+        "blocks": [
+          "TASK-013"
+        ],
+        "can_parallel": [
+          "TASK-007"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Metering & Billing",
+        "api_spec": "n/a",
+        "related_code": [
+          "src/metering"
+        ]
+      },
+      "definition_of_done": [
+        "Daily aggregates generated",
+        "Reconciliation pass under threshold",
+        "Billing UI functional"
+      ]
+    },
+    {
+      "task_id": "TASK-010",
+      "requirement_id": "REQ-013",
+      "component": "Monitoring & Observability",
+      "title": "Integrate OpenTelemetry, Prometheus metrics and Grafana dashboards",
+      "description": "Instrument services with OpenTelemetry and expose Prometheus metrics; provide default SLO dashboards and alerts.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Services emit traces and spans to collector",
+          "Prometheus scrapes metrics and Grafana dashboards show key SLOs",
+          "Synthetic probes validate API availability and core flows",
+          "Alerts configured for high error rates, projection lag and webhook failure rate"
+        ],
+        "implementation_details": [
+          "Add OpenTelemetry instrumentation libraries to services, propagate context headers",
+          "Provide OTLP collector deployment and integration with Jaeger/Tempo",
+          "Define Prometheus exporters and default dashboards in Grafana",
+          "Configure GitHub Actions to run synthetic probes in staging on PRs"
+        ],
+        "testing_requirements": [
+          "Integration: traces link across API -> command -> outbox -> projection",
+          "Smoke: metrics exist after app boot and synthetic probes succeed",
+          "Alert: fire test alerts to validate PagerDuty integration"
+        ],
+        "security_considerations": [
+          "Sanitize sensitive data in traces",
+          "Limit retention of traces for privacy and cost control"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 32,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-7",
+        "skillset_required": [
+          "OpenTelemetry",
+          "Prometheus",
+          "Grafana"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-002",
+          "TASK-003"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#monitoring_observability",
+        "api_spec": "n/a",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Traces available",
+        "Dashboards created",
+        "Alerts firing in test scenarios"
+      ]
+    },
+    {
+      "task_id": "TASK-011",
+      "requirement_id": "REQ-011",
+      "component": "Reconciliation",
+      "title": "Nightly reconciliation pipeline and reporting",
+      "description": "Implement nightly job that reconciles ledger vs snapshots and produces per-tenant reports and repair recommendations.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Nightly job runs and produces reconciliation reports stored in S3",
+          "Discrepancies above threshold are alerted and surfaced in admin UI",
+          "Repair job template suggested with dry-run mode"
+        ],
+        "implementation_details": [
+          "Job reads stock_movements (or projections) and compares against stock_levels",
+          "Produce CSV/JSON reports and upload to S3; store metadata in jobs table",
+          "Create POST /admin/reconciliation/{id}/repair that enqueues repair jobs for admin review"
+        ],
+        "testing_requirements": [
+          "Integration: reconcile known synthetic mismatch and confirm report generation",
+          "E2E: admin triggers repair which enqueues job and updates status"
+        ],
+        "security_considerations": [
+          "Ensure only authorized admins can trigger repairs",
+          "Protect reconciliation reports as they contain PII"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 40,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-5",
+        "skillset_required": [
+          "ETL",
+          "Postgres",
+          "S3"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-008"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-009"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#non_functional_requirements_mapping",
+        "api_spec": "n/a",
+        "related_code": [
+          "src/reconciliation"
+        ]
+      },
+      "definition_of_done": [
+        "Nightly job runs",
+        "Reports available in admin UI",
+        "Repair flow validated in dry-run mode"
+      ]
+    },
+    {
+      "task_id": "TASK-012",
+      "requirement_id": "REQ-018",
+      "component": "Admin Console",
+      "title": "Admin UI: DLQ replay, sandbox management and billing view",
+      "description": "Implement admin UI pages for webhook DLQ replay, sandbox lifecycle, tenant billing overview and quickstarts.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Admin pages display DLQ entries with filter and replay actions",
+          "Sandbox management allows create/expire sandbox tenants",
+          "Billing overview shows per-tenant usage and invoices",
+          "RBAC enforced for admin features"
+        ],
+        "implementation_details": [
+          "Build React UI pages and backend admin APIs; reuse SDK for API calls",
+          "Audit actions and store in audit log; offer CSV export for billing",
+          "Protect endpoints with RBAC and integrate with Auth Service"
+        ],
+        "testing_requirements": [
+          "UI tests for DLQ replay and sandbox creation",
+          "Integration tests for RBAC enforcement",
+          "Accessibility checks for admin pages"
+        ],
+        "security_considerations": [
+          "Restrict admin UI to allowed IP ranges initially",
+          "Log all replay actions with operator ID"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 40,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-2",
+        "skillset_required": [
+          "React",
+          "RBAC",
+          "Admin UX"
+        ],
+        "priority": "P1"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-006",
+          "TASK-002",
+          "TASK-009"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-010"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Admin / DevEx Console",
+        "api_spec": "inventory-openapi.yaml#admin",
+        "related_code": [
+          "src/admin"
+        ]
+      },
+      "definition_of_done": [
+        "UI and APIs implemented",
+        "RBAC enforced",
+        "Docs updated"
+      ]
+    },
+    {
+      "task_id": "TASK-013",
+      "requirement_id": "REQ-015",
+      "component": "Compliance & Controls",
+      "title": "Document controls and prepare SOC2 readiness checklist",
+      "description": "Produce documented controls (access, backup, logging), mapping to SOC2 categories and produce artifact repository.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Controls documented and stored in /compliance",
+          "Evidence collection plan exists for backups, access logs and incident reports",
+          "Gap analysis completed with prioritized remediation plan"
+        ],
+        "implementation_details": [
+          "Map infrastructure and application controls to SOC2 criteria",
+          "Create policy docs and evidence collection scripts",
+          "Schedule a pre-audit health check and pen-test as recommended"
+        ],
+        "testing_requirements": [
+          "Internal audit run for evidence collection",
+          "Sample restore exercise to validate backup evidence",
+          "Conduct a small scoped penetration test"
+        ],
+        "security_considerations": [
+          "Ensure access logs are immutable and retained per policy",
+          "Minimize exposure of sensitive docs; control access to /compliance"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 40,
+        "confidence": "low"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-8",
+        "skillset_required": [
+          "Compliance",
+          "Security"
+        ],
+        "priority": "P2"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-010"
+        ],
+        "blocks": [],
+        "can_parallel": []
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#security_architecture",
+        "api_spec": "n/a",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Controls documented",
+        "Evidence scripts in repo",
+        "Remediation plan accepted"
+      ]
+    },
+    {
+      "task_id": "TASK-014",
+      "requirement_id": "REQ-016",
+      "component": "Multi-tenancy",
+      "title": "Enforce tenant isolation and quotas",
+      "description": "Implement tenant context propagation, per-tenant quotas and runtime isolation controls (feature flags, plan limits).",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "All API requests require tenant context and cannot access other tenants' data",
+          "Per-tenant quotas enforced and trigger 429 when exceeded",
+          "Feature flags allowed per-tenant and manageable in Admin UI"
+        ],
+        "implementation_details": [
+          "Propagate X-Tenant-ID throughout service calls and persist as required",
+          "Enforce DB row-level security (RLS) where possible for Postgres",
+          "Implement quota counters in Redis with daily resets and integrate with Metering service",
+          "Add feature flag table linked to tenant"
+        ],
+        "testing_requirements": [
+          "Integration: cross-tenant access attempt fails",
+          "Load: quota counters hold under expected concurrency",
+          "Unit: RLS policies validate resource isolation"
+        ],
+        "security_considerations": [
+          "RLS policies must be carefully audited",
+          "Quotas must be tamper-proof and enforced server-side"
+        ]
+      },
+      "estimation": {
+        "complexity": "L",
+        "estimated_hours": 56,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-3",
+        "skillset_required": [
+          "Postgres RLS",
+          "Redis",
+          "API design"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-003",
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-015"
+        ],
+        "can_parallel": [
+          "TASK-010"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model, #scalability_strategy",
+        "api_spec": "n/a",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "RLS policies in place",
+        "Quotas enforced",
+        "Admin UI shows quota usage"
+      ]
+    },
+    {
+      "task_id": "TASK-015",
+      "requirement_id": "REQ-017",
+      "component": "Deployment & DR",
+      "title": "Implement backups, PITR and DR runbooks",
+      "description": "Configure Postgres PITR, snapshot backups to S3, and write DR runbooks and restore playbooks for production and sandbox.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "PITR configured and tested with 24-hour restore exercise",
+          "Daily snapshots taken to S3 and verified",
+          "Runbooks exist in /RUNBOOKS with step-by-step restore and failover procedures"
+        ],
+        "implementation_details": [
+          "Configure WAL archives to S3, ensure proper retention and encryption",
+          "Automated snapshot job for daily backups and verification via checksum",
+          "Create playbooks and test them in a staging restore exercise",
+          "Document RTO and RPO targets per environment"
+        ],
+        "testing_requirements": [
+          "Execute a staged restore from PITR to a staging cluster",
+          "Verify data integrity and reconcile with production metrics",
+          "Update runbooks based on lessons learned"
+        ],
+        "security_considerations": [
+          "Encrypt backups at rest and in transit",
+          "Limit access to S3 backup bucket and audit accesses"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 40,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "devops-agent-1",
+        "skillset_required": [
+          "Postgres Ops",
+          "S3",
+          "DR"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-010"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#deployment_architecture",
+        "api_spec": "n/a",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Backups verified",
+        "Runbooks in repo",
+        "Restore exercise completed"
+      ]
+    },
+    {
+      "task_id": "TASK-016",
+      "requirement_id": "REQ-012",
+      "component": "SDKs & Quickstarts",
+      "title": "Create Node and Python SDKs and publish quickstarts",
+      "description": "Provide lightweight SDKs that wrap auth, idempotency helper and quickstart examples to reduce time-to-first-success.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Node SDK published to npm with quickstart example that provisions sandbox and performs sample flows",
+          "Python SDK published to PyPI or available as wheel in repo",
+          "CI publishes packages on tagged release",
+          "SDKs include helpers for ETag/If-Match and Idempotency-Key management"
+        ],
+        "implementation_details": [
+          "Create minimal wrappers for API calls; include typed interfaces and small auth helper",
+          "Automate publishing via GitHub Actions on release tags",
+          "Include CLI wrappers (npx twh-quickstart) referencing the SDKs"
+        ],
+        "testing_requirements": [
+          "Unit: SDK functions against mocked API",
+          "Integration: quickstart executed in CI against sandbox",
+          "Security: ensure SDKs do not hardcode secrets"
+        ],
+        "security_considerations": [
+          "Avoid shipping credentials in SDK examples",
+          "Provide clear guidance for secure storage of API keys"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 32,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-9",
+        "skillset_required": [
+          "Node",
+          "Python",
+          "Packaging"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001",
+          "TASK-002"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-012"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#tech_stack",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "/sdk/node",
+          "/sdk/python"
+        ]
+      },
+      "definition_of_done": [
+        "SDKs published or CI artifacts created",
+        "Quickstart passes in CI",
+        "Docs updated"
+      ]
+    },
+    {
+      "task_id": "TASK-017",
+      "requirement_id": "REQ-014",
+      "component": "Security",
+      "title": "Implement KMS/Vault integration and HMAC webhook signing",
+      "description": "Integrate Vault (or cloud KMS) for secret storage and implement HMAC signing for webhook deliveries and API key rotation.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Secrets stored securely and accessible to services via Vault client",
+          "Webhook deliveries signed with HMAC using per-subscriber secret stored in Vault",
+          "API key rotation supported and audited"
+        ],
+        "implementation_details": [
+          "Deploy Vault dev or use cloud secret manager for MVP; integrate client libraries into services",
+          "Provide admin UI to rotate webhook secrets and rotate API keys",
+          "Rotate KMS keys per policy and update runbook"
+        ],
+        "testing_requirements": [
+          "Integration: verify services retrieve secrets from Vault and webhook signatures validate correctly",
+          "DR: simulate Vault unavailability and ensure failsafe behavior documented"
+        ],
+        "security_considerations": [
+          "Rotate secrets regularly; implement least privilege for Vault tokens",
+          "Audit secret accesses"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "devops-agent-2",
+        "skillset_required": [
+          "Vault",
+          "KMS",
+          "Security"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-010"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-015"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#security_architecture",
+        "api_spec": "n/a",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Vault integrated",
+        "Webhook signing validated",
+        "Key rotation documented"
+      ]
+    },
+    {
+      "task_id": "TASK-018",
+      "requirement_id": "REQ-001",
+      "component": "CI / Docs",
+      "title": "Generate Postman collection from canonical OpenAPI and publish",
+      "description": "Generate Postman collection from the canonical inventory-openapi.yaml, publish it to docs/quickstart, and automate validation in CI.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Postman collection committed to docs/quickstart and updated on API changes",
+          "Quickstart sample requests use collection and are runnable with sandbox creds",
+          "CI validates collection generation step"
+        ],
+        "implementation_details": [
+          "Use openapi-to-postman or similar to generate collection from inventory-openapi.yaml; add CI step to compare generated output to committed version",
+          "Expose sample collection download from docs site",
+          "Add README explaining how to run the collection against sandbox"
+        ],
+        "testing_requirements": [
+          "CI: ensure generation step passes",
+          "Manual: run collection against sandbox to ensure requests succeed"
+        ],
+        "security_considerations": [
+          "Do not include production credentials in collection samples"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 8,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "OpenAPI",
+          "docs"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-002"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#api_specification",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": []
+      },
+      "definition_of_done": [
+        "Collection published",
+        "CI generation step in place"
+      ]
+    },
+    {
+      "task_id": "TASK-019",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Locations",
+      "title": "Implement Locations CRUD endpoints",
+      "description": "Implement POST/GET/PUT/DELETE for locations with pagination and filtering.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /locations creates location and returns 201",
+          "GET /locations lists locations with pagination",
+          "PUT /locations/{id} updates location",
+          "DELETE /locations/{id} returns 204"
+        ],
+        "implementation_details": [
+          "Store locations in Postgres locations table",
+          "Validate inputs via OpenAPI validators",
+          "Return standard error model"
+        ],
+        "testing_requirements": [
+          "Unit: CRUD operations work",
+          "Integration: pagination and filtering"
+        ],
+        "security_considerations": [
+          "Ensure tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 12,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-020"
+        ],
+        "can_parallel": [
+          "TASK-003"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/locations",
+        "related_code": [
+          "src/locations"
+        ]
+      },
+      "definition_of_done": [
+        "All acceptance criteria met",
+        "Unit and integration tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-020",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Purchase Orders",
+      "title": "Implement Purchase Orders CRUD and receive endpoints",
+      "description": "Implement CRUD for purchase orders and receive endpoint to create stock movements.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /purchase_orders creates PO",
+          "GET /purchase_orders lists POs",
+          "POST /purchase_orders/{id}/receive appends stock movements"
+        ],
+        "implementation_details": [
+          "Store POs in Postgres",
+          "Receive calls Command Service to append movements"
+        ],
+        "testing_requirements": [
+          "Integration: receive updates stock levels"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-019"
+        ],
+        "blocks": [
+          "TASK-021"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/purchase_orders",
+        "related_code": [
+          "src/purchase_orders"
+        ]
+      },
+      "definition_of_done": [
+        "PO CRUD and receive implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-021",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Sales Orders",
+      "title": "Implement Sales Orders CRUD and ship endpoints",
+      "description": "Implement CRUD for sales orders and ship endpoint to create stock movements.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /sales_orders creates SO",
+          "GET /sales_orders lists SOs",
+          "POST /sales_orders/{id}/ship appends stock movements"
+        ],
+        "implementation_details": [
+          "Store SOs in Postgres",
+          "Ship calls Command Service to append movements"
+        ],
+        "testing_requirements": [
+          "Integration: ship updates stock levels"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-020"
+        ],
+        "blocks": [
+          "TASK-022"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/sales_orders",
+        "related_code": [
+          "src/sales_orders"
+        ]
+      },
+      "definition_of_done": [
+        "SO CRUD and ship implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-022",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Transfers",
+      "title": "Implement Transfers CRUD and receive endpoints",
+      "description": "Implement CRUD for transfers and receive endpoint to create stock movements.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /transfers creates transfer",
+          "GET /transfers lists transfers",
+          "POST /transfers/{id}/receive appends stock movements"
+        ],
+        "implementation_details": [
+          "Store transfers in Postgres",
+          "Receive calls Command Service to append movements"
+        ],
+        "testing_requirements": [
+          "Integration: receive updates stock levels"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-021"
+        ],
+        "blocks": [
+          "TASK-023"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/transfers",
+        "related_code": [
+          "src/transfers"
+        ]
+      },
+      "definition_of_done": [
+        "Transfers CRUD and receive implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-023",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Returns",
+      "title": "Implement Returns CRUD endpoints",
+      "description": "Implement CRUD for returns to handle returned items.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /returns creates return",
+          "GET /returns lists returns"
+        ],
+        "implementation_details": [
+          "Store returns in Postgres"
+        ],
+        "testing_requirements": [
+          "Unit: CRUD operations"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 16,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-022"
+        ],
+        "blocks": [
+          "TASK-024"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/returns",
+        "related_code": [
+          "src/returns"
+        ]
+      },
+      "definition_of_done": [
+        "Returns CRUD implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-024",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Adjustments",
+      "title": "Implement Adjustments CRUD endpoints",
+      "description": "Implement CRUD for adjustments to handle stock corrections.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /adjustments creates adjustment",
+          "GET /adjustments lists adjustments"
+        ],
+        "implementation_details": [
+          "Store adjustments in Postgres"
+        ],
+        "testing_requirements": [
+          "Unit: CRUD operations"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 16,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-023"
+        ],
+        "blocks": [
+          "TASK-025"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_model",
+        "api_spec": "inventory-openapi.yaml#/adjustments",
+        "related_code": [
+          "src/adjustments"
+        ]
+      },
+      "definition_of_done": [
+        "Adjustments CRUD implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-025",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Reports",
+      "title": "Implement Reports endpoints (low_stock, stock_valuation)",
+      "description": "Implement report endpoints for low stock alerts and stock valuation.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /reports/low_stock returns low stock items",
+          "GET /reports/stock_valuation returns valuation data"
+        ],
+        "implementation_details": [
+          "Query read DB for reports"
+        ],
+        "testing_requirements": [
+          "Integration: reports return correct data"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 12,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-008"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-026"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Projection Workers",
+        "api_spec": "inventory-openapi.yaml#/reports",
+        "related_code": [
+          "src/reports"
+        ]
+      },
+      "definition_of_done": [
+        "Reports implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-026",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Exports",
+      "title": "Implement Exports endpoints (stock_csv)",
+      "description": "Implement export endpoints for stock data as CSV.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /exports/stock_csv enqueues job and returns job_id"
+        ],
+        "implementation_details": [
+          "Enqueue job to Jobs Service"
+        ],
+        "testing_requirements": [
+          "Integration: job completes and CSV available"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 8,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-007"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-025"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Jobs Service",
+        "api_spec": "inventory-openapi.yaml#/exports",
+        "related_code": [
+          "src/exports"
+        ]
+      },
+      "definition_of_done": [
+        "Exports implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-027",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Webhooks",
+      "title": "Implement Webhook deliveries and test endpoints",
+      "description": "Implement endpoints for webhook deliveries listing and test sending.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /webhooks/deliveries lists deliveries",
+          "POST /webhooks/test sends test webhook"
+        ],
+        "implementation_details": [
+          "Query DLQ and delivery logs"
+        ],
+        "testing_requirements": [
+          "Integration: test webhook delivered"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 12,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-006"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-028"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Webhook Dispatcher",
+        "api_spec": "inventory-openapi.yaml#/webhooks",
+        "related_code": [
+          "src/webhooks"
+        ]
+      },
+      "definition_of_done": [
+        "Webhook endpoints implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-028",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Audit Logs",
+      "title": "Implement Audit Logs endpoints",
+      "description": "Implement endpoints for querying audit logs.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /audit_logs lists audit entries"
+        ],
+        "implementation_details": [
+          "Query audit table"
+        ],
+        "testing_requirements": [
+          "Integration: logs returned"
+        ],
+        "security_considerations": [
+          "RBAC for audit access"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 8,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-029"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Audit & Logs Store",
+        "api_spec": "inventory-openapi.yaml#/audit_logs",
+        "related_code": [
+          "src/audit"
+        ]
+      },
+      "definition_of_done": [
+        "Audit logs implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-029",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Health",
+      "title": "Implement Health check endpoint",
+      "description": "Implement GET /healthz for health checks.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /healthz returns 200 when healthy"
+        ],
+        "implementation_details": [
+          "Check DB and dependencies"
+        ],
+        "testing_requirements": [
+          "Unit: health check logic"
+        ],
+        "security_considerations": [
+          "No sensitive info"
+        ]
+      },
+      "estimation": {
+        "complexity": "XS",
+        "estimated_hours": 4,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-001"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: API Gateway",
+        "api_spec": "inventory-openapi.yaml#/healthz",
+        "related_code": [
+          "src/health"
+        ]
+      },
+      "definition_of_done": [
+        "Health endpoint implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-030",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Stock",
+      "title": "Implement Stock search and adjust endpoints",
+      "description": "Implement GET /stock/search and POST /stock/adjust.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /stock/search returns stock with filters",
+          "POST /stock/adjust appends movements"
+        ],
+        "implementation_details": [
+          "Search uses projection DB",
+          "Adjust calls Command Service"
+        ],
+        "testing_requirements": [
+          "Integration: search and adjust work"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 20,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Postgres"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-004",
+          "TASK-008"
+        ],
+        "blocks": [
+          "TASK-031"
+        ],
+        "can_parallel": [
+          "TASK-005"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Projection Workers",
+        "api_spec": "inventory-openapi.yaml#/stock",
+        "related_code": [
+          "src/stock"
+        ]
+      },
+      "definition_of_done": [
+        "Stock endpoints implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-031",
+      "requirement_id": "n/a",
+      "component": "Domain API Layer / Items Search",
+      "title": "Implement Items search endpoint",
+      "description": "Implement GET /items/search for searching items.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "GET /items/search returns items with search query"
+        ],
+        "implementation_details": [
+          "Use search index"
+        ],
+        "testing_requirements": [
+          "Integration: search returns results"
+        ],
+        "security_considerations": [
+          "Tenant isolation"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 12,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "Search"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-008"
+        ],
+        "blocks": [],
+        "can_parallel": [
+          "TASK-030"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Search Service",
+        "api_spec": "inventory-openapi.yaml#/items/search",
+        "related_code": [
+          "src/items"
+        ]
+      },
+      "definition_of_done": [
+        "Items search implemented",
+        "Tests passing"
+      ]
+    },
+    {
+      "task_id": "TASK-032",
+      "requirement_id": "n/a",
+      "component": "Auth Service",
+      "title": "Implement Auth login endpoint",
+      "description": "Implement POST /auth/login for JWT issuance.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "POST /auth/login returns JWT on valid creds"
+        ],
+        "implementation_details": [
+          "Validate user and issue JWT"
+        ],
+        "testing_requirements": [
+          "Unit: JWT generation"
+        ],
+        "security_considerations": [
+          "Secure password check"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 12,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-1",
+        "skillset_required": [
+          "Rust|Node",
+          "JWT"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-001"
+        ],
+        "blocks": [
+          "TASK-003"
+        ],
+        "can_parallel": [
+          "TASK-002"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#system_components: Auth Service",
+        "api_spec": "inventory-openapi.yaml#/auth/login",
+        "related_code": [
+          "src/auth"
+        ]
+      },
+      "definition_of_done": [
+        "Auth login implemented",
+        "Tests passing"
+      ]
+    }
+  ],
+  "dependency_graph": {
+    "critical_path": [
+      "TASK-001",
+      "TASK-003",
+      "TASK-004",
+      "TASK-008",
+      "TASK-010"
+    ],
+    "parallel_tracks": [
+      [
+        "TASK-002",
+        "TASK-012",
+        "TASK-016"
+      ],
+      [
+        "TASK-005",
+        "TASK-006",
+        "TASK-007"
+      ],
+      [
+        "TASK-009",
+        "TASK-011",
+        "TASK-013"
+      ]
+    ],
+    "estimated_timeline": "8 weeks with 3 developers"
+  },
+  "sprint_plan": [
+    {
+      "sprint": 1,
+      "duration_days": 7,
+      "goal": "Foundation: OpenAPI, Auth, Items CRUD, Locations",
+      "tasks": [
+        "TASK-001",
+        "TASK-029",
+        "TASK-032",
+        "TASK-003",
+        "TASK-019"
+      ],
+      "deliverable": "Basic API skeleton with auth and core entities"
+    },
+    {
+      "sprint": 2,
+      "duration_days": 7,
+      "goal": "Ledger and Projections: Stock movements, projections, search",
+      "tasks": [
+        "TASK-004",
+        "TASK-005",
+        "TASK-008",
+        "TASK-030",
+        "TASK-031"
+      ],
+      "deliverable": "Working ledger with read projections and search"
+    },
+    {
+      "sprint": 3,
+      "duration_days": 7,
+      "goal": "Business Flows: POs, SOs, Transfers, Returns, Adjustments",
+      "tasks": [
+        "TASK-020",
+        "TASK-021",
+        "TASK-022",
+        "TASK-023",
+        "TASK-024"
+      ],
+      "deliverable": "Complete inventory transaction flows"
+    },
+    {
+      "sprint": 4,
+      "duration_days": 7,
+      "goal": "Async and Reporting: Webhooks, Jobs, Reports, Exports",
+      "tasks": [
+        "TASK-006",
+        "TASK-007",
+        "TASK-025",
+        "TASK-026",
+        "TASK-027"
+      ],
+      "deliverable": "Async processing and reporting capabilities"
+    },
+    {
+      "sprint": 5,
+      "duration_days": 7,
+      "goal": "Admin and DevEx: Sandbox, Admin UI, SDKs",
+      "tasks": [
+        "TASK-002",
+        "TASK-012",
+        "TASK-016",
+        "TASK-018"
+      ],
+      "deliverable": "Developer experience and admin tooling"
+    },
+    {
+      "sprint": 6,
+      "duration_days": 7,
+      "goal": "Observability and Security: Monitoring, Vault, Multi-tenancy",
+      "tasks": [
+        "TASK-010",
+        "TASK-014",
+        "TASK-017",
+        "TASK-028"
+      ],
+      "deliverable": "Production-ready observability and security"
+    },
+    {
+      "sprint": 7,
+      "duration_days": 7,
+      "goal": "Billing and Compliance: Metering, Reconciliation, Controls",
+      "tasks": [
+        "TASK-009",
+        "TASK-011",
+        "TASK-013"
+      ],
+      "deliverable": "Billing pipeline and compliance readiness"
+    },
+    {
+      "sprint": 8,
+      "duration_days": 7,
+      "goal": "DR and Polish: Backups, Runbooks, Final Testing",
+      "tasks": [
+        "TASK-015"
+      ],
+      "deliverable": "DR ready and production launch"
+    }
+  ],
+  "resource_allocation": {
+    "dev-agent-1": {
+      "specialization": "API Development",
+      "assigned_tasks": [
+        "TASK-001",
+        "TASK-003",
+        "TASK-019",
+        "TASK-020",
+        "TASK-021",
+        "TASK-022",
+        "TASK-023",
+        "TASK-024",
+        "TASK-025",
+        "TASK-026",
+        "TASK-027",
+        "TASK-028",
+        "TASK-029",
+        "TASK-030",
+        "TASK-031",
+        "TASK-032"
+      ],
+      "workload_hours": 320
+    },
+    "dev-agent-2": {
+      "specialization": "Frontend and DevEx",
+      "assigned_tasks": [
+        "TASK-002",
+        "TASK-012",
+        "TASK-016",
+        "TASK-018"
+      ],
+      "workload_hours": 120
+    },
+    "dev-agent-3": {
+      "specialization": "Backend Core (CQRS, DB)",
+      "assigned_tasks": [
+        "TASK-004",
+        "TASK-005",
+        "TASK-008",
+        "TASK-014"
+      ],
+      "workload_hours": 160
+    },
+    "dev-agent-4": {
+      "specialization": "Async Services",
+      "assigned_tasks": [
+        "TASK-006",
+        "TASK-007",
+        "TASK-009",
+        "TASK-011"
+      ],
+      "workload_hours": 160
+    },
+    "dev-agent-5": {
+      "specialization": "Observability and Security",
+      "assigned_tasks": [
+        "TASK-010",
+        "TASK-013",
+        "TASK-017"
+      ],
+      "workload_hours": 96
+    },
+    "devops-agent-1": {
+      "specialization": "DevOps",
+      "assigned_tasks": [
+        "TASK-015"
+      ],
+      "workload_hours": 40
+    }
+  },
+  "risk_analysis": [
+    {
+      "task_id": "TASK-004",
+      "risk": "CQRS implementation complexity",
+      "impact": "high",
+      "contingency": "Prototype ledger first, add projections later"
+    },
+    {
+      "task_id": "TASK-008",
+      "risk": "Projection lag affects read performance",
+      "impact": "medium",
+      "contingency": "Start with direct DB reads, optimize later"
+    },
+    {
+      "task_id": "TASK-006",
+      "risk": "Webhook delivery failures",
+      "impact": "medium",
+      "contingency": "Implement DLQ and manual replay from day one"
+    },
+    {
+      "task_id": "TASK-010",
+      "risk": "Observability setup overhead",
+      "impact": "low",
+      "contingency": "Use managed services for initial deployment"
+    },
+    {
+      "task_id": "TASK-016",
+      "risk": "SDK maintenance burden",
+      "impact": "low",
+      "contingency": "Generate SDKs from OpenAPI, automate publishing"
+    }
+  ]
+}
