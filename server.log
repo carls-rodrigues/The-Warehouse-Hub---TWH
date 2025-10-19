@@ -1,4 +1,3 @@
-   Compiling The-Warehouse-Hub---TWH v0.1.0 (/home/cerf/development/The-Warehouse-Hub---TWH)
 warning: unused import: `LoginUseCase`
  --> src/infrastructure/controllers/auth_controller.rs:1:58
   |
@@ -40,6 +39,6 @@ warning: struct `Location` is never constructed
   |            ^^^^^^^^
 
 warning: `The-Warehouse-Hub---TWH` (bin "The-Warehouse-Hub---TWH") generated 6 warnings (run `cargo fix --bin "The-Warehouse-Hub---TWH"` to apply 3 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.86s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
      Running `target/debug/The-Warehouse-Hub---TWH`
 🚀 Server running on http://0.0.0.0:8080

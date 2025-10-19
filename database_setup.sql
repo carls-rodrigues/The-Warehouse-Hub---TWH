@@ -28,7 +28,7 @@ INSERT INTO users (id, email, password_hash, first_name, last_name, active)
 VALUES (
     '550e8400-e29b-41d4-a716-446655440000',
     'test@example.com',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPjYQmO7K3Q7e', -- 'password'
+    '$2b$12$kQMaeUg9psmEZ/L6aS/d6.YrMZv5VCym3ebSX7D1.3lvT3iq6/wfC', -- 'password'
     'Test',
     'User',
     true
