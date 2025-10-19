@@ -39,6 +39,8 @@
 ## High-level architecture
 - API Gateway → Domain Services (Items, Stock, Orders, Webhooks, Jobs, Reports, Audit) → Command Service → Event Bus → Projections/Read Stores → Webhook Dispatcher → Object Storage/Artifacts → Admin Console.
 
+**Backend runtime:** Primary language: **Rust** (memory safety, performance, small binaries). A minimal Rust scaffold using axum is included in `backend-rust/`.
+
 ## Core design choices
 - Ledger-first inventory: every inventory-affecting action writes immutable StockMovement; StockLevels are snapshots updated transactionally with movements.  
 - CQRS: separate command path (write correctness) from read projections (optimized queries, search).  

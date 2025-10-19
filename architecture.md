@@ -26,9 +26,9 @@ Hybrid: Modular Monolith → Microservices, Event-driven CQRS.
 - Key libraries: React Router; React Query (TanStack); Chakra UI or TailwindCSS.
 
 ### Backend
-- Primary language: **Go** (performance, small binaries, concurrency)  
+- Primary language: **Rust** (memory safety, performance, small binaries, modern async ecosystem)  
 - Secondary tooling: **Node.js** for SDK generation and DevEx utilities (Express/Fastify where needed)  
-- Frameworks: Gin (Go); lightweight Node frameworks for tooling.
+- Frameworks: Actix-web or Axum (Rust); Tokio async runtime; lightweight Node frameworks for tooling.
 
 ### Datastores & Indexing
 - Primary DB: **PostgreSQL** (ACID, transactional guarantees, JSONB).  
