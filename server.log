@@ -1,0 +1,45 @@
+   Compiling The-Warehouse-Hub---TWH v0.1.0 (/home/cerf/development/The-Warehouse-Hub---TWH)
+warning: unused import: `LoginUseCase`
+ --> src/infrastructure/controllers/auth_controller.rs:1:58
+  |
+1 | use crate::application::use_cases::login::{LoginRequest, LoginUseCase};
+  |                                                          ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `crate::infrastructure::repositories::postgres_user_repository::PostgresUserRepository`
+ --> src/infrastructure/controllers/auth_controller.rs:2:5
+  |
+2 | use crate::infrastructure::repositories::postgres_user_repository::PostgresUserRepository;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> src/infrastructure/controllers/auth_controller.rs:7:5
+  |
+7 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: struct `Inventory` is never constructed
+ --> src/domain/entities/inventory.rs:2:12
+  |
+2 | pub struct Inventory {
+  |            ^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` on by default
+
+warning: struct `Item` is never constructed
+ --> src/domain/entities/item.rs:2:12
+  |
+2 | pub struct Item {
+  |            ^^^^
+
+warning: struct `Location` is never constructed
+ --> src/domain/entities/location.rs:2:12
+  |
+2 | pub struct Location {
+  |            ^^^^^^^^
+
+warning: `The-Warehouse-Hub---TWH` (bin "The-Warehouse-Hub---TWH") generated 6 warnings (run `cargo fix --bin "The-Warehouse-Hub---TWH"` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.86s
+     Running `target/debug/The-Warehouse-Hub---TWH`
+🚀 Server running on http://0.0.0.0:8080
