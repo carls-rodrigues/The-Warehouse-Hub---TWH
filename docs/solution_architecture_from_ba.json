@@ -1,0 +1,552 @@
+{
+  "architecture_document": {
+    "system_overview": "TWH is a developer-first, ledger-first inventory platform designed to provide a production-ready REST API, reliable webhooks, async job processing, and operational tooling. The system guarantees ledger immutability (append-only stock_movements), transactional snapshots (stock_levels), multi-tenant isolation, idempotency and optimistic concurrency controls, and a sandbox/devex onboarding experience to enable first-success within 10 minutes.",
+    "architecture_pattern": "Hybrid (Modular Monolith → Microservices) + Event-driven CQRS",
+    "architecture_rationale": "Start with a modular monolith for low ops overhead and rapid iteration (suitable for a solo-founder MVP), while designing clear boundaries and contracts so components can evolve into microservices as scale, team size, and operational demands increase. CQRS + event-driven (outbox → Kafka) is required to provide ledger replayability, decoupled read performance for POS scenarios, and reliable webhook/event delivery with DLQ and replay.",
+    "tech_stack": {
+      "frontend": {
+        "framework": "React + TypeScript",
+        "rationale": "Fast developer UX for admin/DevEx console, strong ecosystem for docs/SDK, quick prototyping",
+        "key_libraries": [
+          "React Router",
+          "TanStack Query (React Query)",
+          "Chakra UI / Tailwind CSS"
+        ]
+      },
+      "backend": {
+        "language": "Rust (primary) with Node.js for SDKs & DevEx tooling",
+        "framework": "Axum or Actix-web (Rust); Fastify/Express for Node",
+        "rationale": "Rust offers performance and safety for critical write-paths; Node reduces friction for SDKs, quickstarts and contributor onboarding"
+      },
+      "database": {
+        "type": "PostgreSQL",
+        "rationale": "ACID guarantees for ledger + snapshot atomicity, JSONB for flexible metadata, PITR for DR"
+      },
+      "infrastructure": {
+        "hosting": "Start: self-hosted single VM/VPS (Docker Compose or k3s). Production: AWS (RDS, EKS/MSK/ElastiCache, S3)",
+        "rationale": "Low-cost initial operations for solo-founder, then migrate to managed services to reduce ops and meet enterprise SLAs"
+      },
+      "additional_services": [
+        {
+          "service": "Redis",
+          "rationale": "Token-bucket rate-limiting, idempotency cache, locks and low-latency counters"
+        },
+        {
+          "service": "Kafka (or managed equivalent)",
+          "rationale": "Durable, replayable event bus required for outbox/replay, projections and webhook dispatcher"
+        },
+        {
+          "service": "Elasticsearch / Meilisearch",
+          "rationale": "Low-latency full-text and SKU search for POS and admin queries"
+        },
+        {
+          "service": "S3 / MinIO",
+          "rationale": "Job artifacts, backups and archival storage"
+        },
+        {
+          "service": "Prometheus + Grafana",
+          "rationale": "Metrics and SLO dashboards"
+        },
+        {
+          "service": "OpenTelemetry + Jaeger/Tempo",
+          "rationale": "Distributed tracing for end-to-end debugging"
+        },
+        {
+          "service": "Vault / Cloud Secret Manager",
+          "rationale": "Secure secret storage (webhook secrets, encryption keys)"
+        }
+      ]
+    },
+    "system_components": [
+      {
+        "component_name": "API Gateway / Edge",
+        "responsibility": "TLS termination, WAF, authentication (JWT/API keys), per-key & per-tenant rate-limiting, request enrichment (ETag headers), metrics and canary routing",
+        "interfaces": [
+          "Proxy all public/admin endpoints",
+          "GET /health",
+          "GET /metrics"
+        ],
+        "dependencies": [
+          "Auth Service",
+          "Redis (rate counters)",
+          "Logging/Tracing"
+        ],
+        "scaling_strategy": "Horizontal - stateless; run behind ALB or k8s ingress; autoscale by RPS"
+      },
+      {
+        "component_name": "Auth Service",
+        "responsibility": "Issue/validate JWTs, manage API keys, sandbox token issuance, SSO/SAML for Enterprise, RBAC enforcement",
+        "interfaces": [
+          "POST /auth/login",
+          "POST /auth/refresh",
+          "POST /api-keys/rotate"
+        ],
+        "dependencies": [
+          "Postgres (user/tenant tables)",
+          "Vault"
+        ],
+        "scaling_strategy": "Horizontal - cache auth lookups in Redis; short TTLs for revocation to reduce DB hits"
+      },
+      {
+        "component_name": "Domain API Layer",
+        "responsibility": "Expose OpenAPI-driven public endpoints (items, POs, SOs, transfers, returns), request validation, simple orchestration and forwarding writes to Command Service",
+        "interfaces": [
+          "GET /items",
+          "POST /items",
+          "POST /purchase_orders/{id}/receive",
+          "POST /sales_orders/{id}/ship"
+        ],
+        "dependencies": [
+          "Auth Service",
+          "Command Service",
+          "Postgres for reads (where needed)"
+        ],
+        "scaling_strategy": "Stateless; scale horizontally; keep controllers thin to minimize business logic duplication"
+      },
+      {
+        "component_name": "Command Service (Write Path)",
+        "responsibility": "Append append-only stock_movements, update stock_levels snapshot transactionally within shard-local DB transaction, persist idempotency records, write outbox rows",
+        "interfaces": [
+          "gRPC/RPC AppendMovements API consumed by Domain APIs"
+        ],
+        "dependencies": [
+          "Postgres (primary) with partitioning/shards",
+          "Redis for locks/counters",
+          "Outbox table"
+        ],
+        "scaling_strategy": "Single-writer-per-shard; add shards by tenant_id (or tenant_id+location_id) when write scale grows"
+      },
+      {
+        "component_name": "Outbox Publisher",
+        "responsibility": "Read transactional outbox and publish domain events to Kafka topics with idempotent producers and ordering guarantees per partition",
+        "interfaces": [
+          "Poll Outbox Table",
+          "Kafka Producer"
+        ],
+        "dependencies": [
+          "Postgres",
+          "Kafka"
+        ],
+        "scaling_strategy": "Worker pool with partition affinity to shards"
+      },
+      {
+        "component_name": "Projection Workers / Read Services",
+        "responsibility": "Consume Kafka events and build denormalized read stores (POS read tables, search index) and update projection lag checkpoints",
+        "interfaces": [
+          "Kafka consumer groups",
+          "Write to read DB and Search Cluster"
+        ],
+        "dependencies": [
+          "Kafka",
+          "Read DBs",
+          "Search index"
+        ],
+        "scaling_strategy": "Consumer groups parallelized by Kafka partition"
+      },
+      {
+        "component_name": "Search Service",
+        "responsibility": "Provide low-latency search and POS queries; maintain indexes via projection pipeline",
+        "interfaces": [
+          "GET /items/search",
+          "Indexing pipeline endpoints"
+        ],
+        "dependencies": [
+          "Projection Workers",
+          "Search cluster (ES/Meili)"
+        ],
+        "scaling_strategy": "Scale nodes for query throughput; tune refresh intervals for near real-time consistency vs indexing costs"
+      },
+      {
+        "component_name": "Webhook Dispatcher",
+        "responsibility": "Sign payloads, manage retry/backoff with jitter, move persistent failures to DLQ, support replay API, per-tenant metrics",
+        "interfaces": [
+          "Consume domain.events topic",
+          "POST to subscriber URLs",
+          "Admin DLQ APIs"
+        ],
+        "dependencies": [
+          "Kafka",
+          "Redis (per-subscription rate limits)",
+          "Vault (secrets)",
+          "DLQ store (Postgres/S3)"
+        ],
+        "scaling_strategy": "Worker pool; partition per-tenant/partition; quarantine misbehaving subscribers"
+      },
+      {
+        "component_name": "Jobs Service & Workers",
+        "responsibility": "Accept /jobs requests for imports/exports/reconciliation; orchestrate long-running tasks, store artifacts in object storage with signed URLs",
+        "interfaces": [
+          "POST /jobs",
+          "GET /jobs/{id}",
+          "Worker queue consumers"
+        ],
+        "dependencies": [
+          "Object Storage (S3)",
+          "Queue/Kafka",
+          "Postgres"
+        ],
+        "scaling_strategy": "Autoscale workers by queue depth; enforce quotas per tier and priority queues for paid customers"
+      },
+      {
+        "component_name": "Metering & Billing",
+        "responsibility": "Consume usage events, enforce quotas, generate billing records and invoices, expose billing dashboard and alerts",
+        "interfaces": [
+          "Consume usage topics",
+          "Admin billing APIs"
+        ],
+        "dependencies": [
+          "Kafka",
+          "Redis counters",
+          "Postgres billing tables"
+        ],
+        "scaling_strategy": "Partitioned by tenant; periodic batch aggregation for invoices"
+      },
+      {
+        "component_name": "Admin / DevEx Console",
+        "responsibility": "Tenant onboarding, sandbox provisioning, key management, usage dashboards, webhook management, DLQ replay UI and quickstarts",
+        "interfaces": [
+          "React UI",
+          "Admin REST APIs"
+        ],
+        "dependencies": [
+          "Auth Service",
+          "Metering",
+          "Postgres",
+          "Logging"
+        ],
+        "scaling_strategy": "Stateless UI + API backends; caching for heavy read endpoints"
+      },
+      {
+        "component_name": "Audit & Logs Store",
+        "responsibility": "Persist immutable write-audit records and centralize structured logs for compliance",
+        "interfaces": [
+          "Audit write/read API"
+        ],
+        "dependencies": [
+          "Postgres append-only tables",
+          "ELK/Loki"
+        ],
+        "scaling_strategy": "Append-only partitions, periodic archiving to S3 for long-term retention"
+      }
+    ],
+    "data_model": {
+      "entities": [
+        {
+          "name": "tenant",
+          "attributes": [
+            "id UUID PK",
+            "name",
+            "billing_plan",
+            "created_at"
+          ],
+          "indexes": [
+            "id"
+          ]
+        },
+        {
+          "name": "user",
+          "attributes": [
+            "id UUID PK",
+            "tenant_id FK",
+            "email",
+            "role",
+            "password_hash nullable",
+            "created_at"
+          ],
+          "indexes": [
+            "tenant_id",
+            "email"
+          ]
+        },
+        {
+          "name": "item",
+          "attributes": [
+            "id UUID",
+            "tenant_id",
+            "sku",
+            "name",
+            "unit",
+            "cost_price",
+            "sale_price",
+            "metadata JSONB",
+            "created_at",
+            "updated_at"
+          ],
+          "indexes": [
+            "tenant_id",
+            "sku",
+            "name"
+          ]
+        },
+        {
+          "name": "location",
+          "attributes": [
+            "id UUID",
+            "tenant_id",
+            "name",
+            "type"
+          ],
+          "indexes": [
+            "tenant_id"
+          ]
+        },
+        {
+          "name": "stock_movement",
+          "attributes": [
+            "id UUID PK",
+            "tenant_id",
+            "item_id",
+            "location_id",
+            "change_qty",
+            "type",
+            "ref_type",
+            "ref_id",
+            "user_id",
+            "metadata",
+            "idempotency_key",
+            "created_at"
+          ],
+          "indexes": [
+            "tenant_id",
+            "item_id",
+            "location_id",
+            "created_at"
+          ]
+        },
+        {
+          "name": "stock_level",
+          "attributes": [
+            "tenant_id,item_id,location_id composite PK",
+            "qty_on_hand",
+            "qty_reserved",
+            "last_counted_at",
+            "e_tag",
+            "updated_at"
+          ],
+          "indexes": [
+            "tenant_id",
+            "item_id",
+            "location_id"
+          ]
+        },
+        {
+          "name": "job",
+          "attributes": [
+            "job_id",
+            "tenant_id",
+            "type",
+            "status",
+            "result_url",
+            "errors JSONB",
+            "timestamps"
+          ],
+          "indexes": [
+            "tenant_id",
+            "status"
+          ]
+        },
+        {
+          "name": "webhook_subscription",
+          "attributes": [
+            "id",
+            "tenant_id",
+            "url",
+            "events JSON",
+            "secret_encrypted",
+            "created_at"
+          ],
+          "indexes": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "shard_key_recommendation": "tenant_id initially; consider tenant_id+location_id for very high-volume tenants"
+    },
+    "api_specification": {
+      "base_url": "https://api.thewarehousehub.com/v1",
+      "authentication": "JWT Bearer token; API keys for M2M",
+      "common_headers": [
+        "Idempotency-Key (retained default 30d)",
+        "If-Match (ETag)",
+        "X-Tenant-ID",
+        "X-TWH-Signature"
+      ],
+      "critical_endpoints": [
+        {
+          "method": "POST",
+          "path": "/items",
+          "notes": "Creates item; requires Idempotency-Key; returns ETag"
+        },
+        {
+          "method": "POST",
+          "path": "/stock_movements",
+          "notes": "Append-only write API; batch & single writes; atomic persistence"
+        },
+        {
+          "method": "GET",
+          "path": "/stock_levels",
+          "notes": "Read snapshot for POS queries"
+        },
+        {
+          "method": "POST",
+          "path": "/webhooks/register",
+          "notes": "Register webhook and return one-time secret"
+        },
+        {
+          "method": "POST",
+          "path": "/jobs",
+          "notes": "Enqueue long-running job; returns job_id (202)"
+        }
+      ],
+      "error_model": "{code, message, details, request_id} — use 429 for rate-limits, 412 for ETag mismatch, 409 for conflicts, 401/403 for auth failures"
+    },
+    "security_architecture": {
+      "authentication": "JWT with refresh tokens; API keys for M2M; SSO (SAML/OIDC) for Enterprise",
+      "authorization": "RBAC (Admin, Dev, ReadOnly, Billing) and resource-scoped permissions",
+      "data_encryption": "TLS 1.3 in transit; AES-256 at rest with KMS-managed keys",
+      "api_security": [
+        "Rate limiting (gateway + Redis)",
+        "Input validation via OpenAPI",
+        "WAF on gateway",
+        "CORS restrictions"
+      ],
+      "secrets_management": "Vault or cloud secret manager; webhook secrets shown once and stored encrypted",
+      "webhook_security": "HMAC-SHA256 signature (X-TWH-Signature) with timestamp tolerance and optional mTLS for enterprise"
+    },
+    "scalability_strategy": {
+      "database": "Logical partitions per tenant → read replicas → physical sharding by tenant/location when required; connection pooling (PgBouncer)",
+      "api": "Stateless services behind gateway; horizontal scaling with autoscaling by RPS/CPU; circuit-breakers and graceful degradation",
+      "caching": "Redis for token-bucket and idempotency caches; local in-memory caches for hot reads; fallback to DB when Redis unavailable",
+      "search": "Dedicated search cluster; tune refresh intervals and incremental index updates from projections"
+    },
+    "monitoring_observability": {
+      "logging": "Structured JSON logs with request_id, tenant_id, user_id; centralize to ELK or Loki",
+      "metrics": "Prometheus metrics for latency histograms, error counts, queue lag, webhook success rate; Grafana SLO dashboards",
+      "tracing": "OpenTelemetry across API→workers→webhooks; traces to Jaeger/Tempo",
+      "alerting": "PagerDuty for sev-1; Slack for ops channels; synthetic probes for availability and reconciliation jobs"
+    },
+    "deployment_architecture": {
+      "environments": [
+        "development",
+        "sandbox",
+        "staging",
+        "production"
+      ],
+      "ci_cd": "GitHub Actions for lint/tests/OpenAPI contract tests; images pushed to registry; ArgoCD/Flux for GitOps CD",
+      "rollback_strategy": "Canary or Blue-Green deployments with automated SLO-based rollback triggers",
+      "disaster_recovery": "PITR-enabled Postgres, daily snapshots to S3, outbox replay and projection rebuild scripts; quarterly DR drills"
+    }
+  },
+  "architecture_decisions": [
+    {
+      "decision": "PostgreSQL as primary store",
+      "rationale": "ACID transactions required for ledger correctness and snapshot atomicity",
+      "alternatives_considered": [
+        "MongoDB",
+        "MySQL"
+      ],
+      "trade_offs": "Stricter schema but stronger consistency"
+    },
+    {
+      "decision": "Event-driven with transactional outbox and Kafka",
+      "rationale": "Needed for replayability, decoupled projections, and robust webhook delivery",
+      "alternatives_considered": [
+        "RabbitMQ",
+        "SQS+Lambda"
+      ],
+      "trade_offs": "Operational overhead vs replay and ordering guarantees"
+    },
+    {
+      "decision": "Start as modular monolith and evolve to microservices",
+      "rationale": "Minimize early ops burden for solo-founder while preserving migration paths",
+      "alternatives_considered": [
+        "Microservices from day one"
+      ],
+      "trade_offs": "Simple early ops vs later refactor effort"
+    },
+    {
+      "decision": "Primary services in Rust, Node.js for SDKs",
+      "rationale": "Performance and safety for core; DX and SDK velocity for Node",
+      "alternatives_considered": [
+        "Go",
+        "Python"
+      ],
+      "trade_offs": "Hiring/learning curve vs runtime performance and safety"
+    }
+  ],
+  "technical_risks": [
+    {
+      "risk": "Skill gap: Rust + CQRS expertise lacking in solo-founder",
+      "probability": "high",
+      "impact": "high",
+      "mitigation": "Consider Node/Python for MVP, hire contractors, or limit Rust usage to performance-critical subsystems"
+    },
+    {
+      "risk": "Database hotspots and write contention for high-volume tenants",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Shard by tenant or tenant+location; implement single-writer-per-shard; monitor and alert on write latencies"
+    },
+    {
+      "risk": "Event bus operational complexity (Kafka lag/outages)",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Start with simpler queue for MVP, adopt managed Kafka for production, instrument consumer lag and build out automatic replay workflows"
+    },
+    {
+      "risk": "Idempotency/Redis unavailability impacting correctness",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Fallback to DB-backed idempotency checks, multi-AZ Redis, graceful degradation"
+    },
+    {
+      "risk": "Metering/costing inaccuracies leading to billing disputes",
+      "probability": "low",
+      "impact": "high",
+      "mitigation": "Event-sourced metering pipeline, reconciliation tests, transparent usage dashboards and dispute flow"
+    }
+  ],
+  "non_functional_requirements_mapping": [
+    {
+      "requirement_id": "REQ-013",
+      "nfr_type": "observability",
+      "target": "Traces + metrics + logs available; critical metrics visible within 1 minute",
+      "architecture_support": "OpenTelemetry + Prometheus + Grafana; instrumented services; synthetic probes"
+    },
+    {
+      "requirement_id": "REQ-009",
+      "nfr_type": "usability_activation",
+      "target": "First successful API call in sandbox within 10 minutes",
+      "architecture_support": "Sandbox tenant provisioning pipeline, quickstart scripts, example SDKs and sample data"
+    },
+    {
+      "requirement_id": "REQ-008",
+      "nfr_type": "performance",
+      "target": "POS search/stock read p95 < 100ms under expected load",
+      "architecture_support": "Projection read stores + dedicated search cluster + caching"
+    },
+    {
+      "requirement_id": "REQ-004",
+      "nfr_type": "correctness",
+      "target": "Nightly reconciliation completes and flags discrepancies > threshold; snapshot updates idempotent",
+      "architecture_support": "Outbox replay, reconciliation jobs, per-tenant reports and alerts"
+    },
+    {
+      "requirement_id": "REQ-005",
+      "nfr_type": "concurrency",
+      "target": "ETag/If-Match enforce 412 on mismatch; idempotency keys dedupe in 99.999% of retries",
+      "architecture_support": "Idempotency store (Redis + DB fallback), ETag generation and validation in API layer"
+    },
+    {
+      "requirement_id": "REQ-010",
+      "nfr_type": "billing_accuracy",
+      "target": "Billing records reconcile with usage events within 1% variance; invoices generated on schedule",
+      "architecture_support": "Event-sourced metering, billing exports and reconciliation tests"
+    }
+  ],
+  "diagrams": {
+    "system_architecture": "graph TD\n  Internet-->|TLS|APIGateway[API Gateway]\n  APIGateway-->Domain[Domain APIs]\n  Domain-->Cmd[Command Service]\n  Cmd-->Postgres[Postgres Primary]\n  Cmd-->Outbox[Outbox Table]\n  Outbox-->OutboxPublisher[Outbox Publisher]\n  OutboxPublisher-->Kafka[Kafka Cluster]\n  Kafka-->Projection[Projection Workers]\n  Projection-->ReadDB[Read DB]\n  Projection-->Search[Search Cluster]\n  Kafka-->Webhook[Webhook Dispatcher]\n  Webhook-->Subscribers[External Subscribers]\n  JobsService-->ObjectStore[S3/MinIO]\n  AdminConsole-->Metering[Metering & Billing]",
+    "data_flow": "sequenceDiagram\n  API->>Domain: POST /purchase_orders/{id}/receive\n  Domain->>Cmd: Append movements via RPC\n  Cmd->>Postgres: TX write movements + snapshot + outbox\n  Outbox->>Kafka: Publisher publishes events\n  Kafka->>Projection: Projection updates read model and search\n  Kafka->>Webhook: Webhook dispatcher enqueues deliveries",
+    "deployment": "graph TD\n  Internet --> ALB[ALB/WAF]\n  ALB --> K8sIngress[K8s Ingress]\n  K8sIngress --> APIPods[API Pods]\n  K8sIngress --> WorkerPods[Worker Pods]\n  APIPods --> RDS[RDS Postgres]\n  WorkerPods --> KafkaCluster[Kafka Cluster]\n  WorkerPods --> Redis[Redis Cluster]\n  WorkerPods --> ES[Search Cluster]\n  WorkerPods --> S3[S3/MinIO]"
+  }
+}
