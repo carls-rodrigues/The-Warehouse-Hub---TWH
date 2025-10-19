@@ -1,0 +1,1517 @@
+openapi: 3.0.3
+info:
+  title: The Warehouse Hub (TWH) API
+  version: "1.1.0"
+  description: >
+    The Warehouse Hub (TWH) Inventory API. Production-ready contract with
+    optimistic concurrency (ETag / If-Match), idempotent creates (Idempotency-Key),
+    webhook HMAC signing, tenant scoping (X-Tenant-ID), async jobs, cursor pagination,
+    search endpoints, include_movements for stock queries, and a standardized error model.
+  contact:
+    name: TWH Support
+    email: support@thewarehousehub.com
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.thewarehousehub.com/v1
+    description: Production
+  - url: https://sandbox.api.thewarehousehub.com/v1
+    description: Sandbox for testing (ephemeral tenants, sample data)
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    page:
+      name: page
+      in: query
+      description: Page number for page-based pagination (1-based)
+      schema:
+        type: integer
+        default: 1
+    per_page:
+      name: per_page
+      in: query
+      description: Items per page (page-based). Max 200.
+      schema:
+        type: integer
+        default: 25
+        maximum: 200
+    cursor:
+      name: cursor
+      in: query
+      description: Cursor token returned by previous response for cursor-based pagination
+      schema:
+        type: string
+    limit:
+      name: limit
+      in: query
+      description: Limit for cursor-based lists (max 1000)
+      schema:
+        type: integer
+        default: 100
+        maximum: 1000
+    include_movements:
+      name: include_movements
+      in: query
+      description: Include recent stock_movements in stock responses (costly)
+      schema:
+        type: boolean
+        default: false
+    tenant:
+      name: X-Tenant-ID
+      in: header
+      description: Tenant identifier (required for multi-tenant requests)
+      schema:
+        type: string
+    ifMatch:
+      name: If-Match
+      in: header
+      description: ETag value or updated_at timestamp to enforce optimistic concurrency
+      schema:
+        type: string
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: Unique key to make POST requests idempotent (server persists mapping)
+      schema:
+        type: string
+    webhookSignatureHeader:
+      name: X-TWH-Signature
+      in: header
+      description: HMAC-SHA256 hex signature of webhook payload using subscription secret
+      schema:
+        type: string
+
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+    Timestamp:
+      type: string
+      format: date-time
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (INVALID_REQUEST, NOT_FOUND, etc.)
+        message:
+          type: string
+          description: Human readable message
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              issue: { type: string }
+        request_id:
+          type: string
+          description: Request identifier for support/debugging
+    PagingMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        total_pages: { type: integer }
+    CursorMeta:
+      type: object
+      properties:
+        next_cursor: { type: string }
+        has_more: { type: boolean }
+    ItemDimensions:
+      type: object
+      properties:
+        length: { type: number, format: double }
+        width: { type: number, format: double }
+        height: { type: number, format: double }
+    Item:
+      type: object
+      required: [id, sku, name, unit, cost_price, active, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        sku: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        unit: { type: string, description: "e.g., ea, kg" }
+        barcode: { type: string }
+        cost_price: { type: number, format: double }
+        sale_price: { type: number, format: double }
+        reorder_point: { type: integer }
+        reorder_qty: { type: integer }
+        weight: { type: number, format: double }
+        dimensions: { $ref: '#/components/schemas/ItemDimensions' }
+        metadata:
+          type: object
+          description: Free-form metadata for custom integrations
+        active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    LocationAddress:
+      type: object
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        region: { type: string }
+        postal_code: { type: string }
+        country: { type: string }
+    Location:
+      type: object
+      required: [id, name, active, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string }
+        code: { type: string }
+        address: { $ref: '#/components/schemas/LocationAddress' }
+        type:
+          type: string
+          enum: [warehouse, store, drop-ship]
+        active: { type: boolean }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    StockMovement:
+      type: object
+      required: [id, item_id, location_id, change_qty, type, user_id, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        item_id: { $ref: '#/components/schemas/UUID' }
+        location_id: { $ref: '#/components/schemas/UUID' }
+        change_qty: { type: integer }
+        type:
+          type: string
+          enum: [SALE, RECEIVE, ADJUSTMENT, TRANSFER_OUT, TRANSFER_IN, RESERVE, UNRESERVE]
+        ref_type: { type: string, description: "Reference entity type e.g., sales_order" }
+        ref_id: { $ref: '#/components/schemas/UUID' }
+        user_id: { $ref: '#/components/schemas/UUID' }
+        note: { type: string }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    StockLevel:
+      type: object
+      properties:
+        item_id: { $ref: '#/components/schemas/UUID' }
+        location_id: { $ref: '#/components/schemas/UUID' }
+        qty_on_hand: { type: integer }
+        qty_reserved: { type: integer }
+        qty_on_order: { type: integer }
+        last_counted_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+        recent_movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+    PurchaseOrderLine:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        po_id: { $ref: '#/components/schemas/UUID' }
+        item_id: { $ref: '#/components/schemas/UUID' }
+        qty_ordered: { type: integer }
+        qty_received: { type: integer }
+        unit_cost: { type: number, format: double }
+        line_total: { type: number, format: double }
+    PurchaseOrder:
+      type: object
+      required: [id, po_number, supplier_id, status, created_by, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        po_number: { type: string }
+        supplier_id: { $ref: '#/components/schemas/UUID' }
+        status:
+          type: string
+          enum: [DRAFT, OPEN, RECEIVING, PARTIAL_RECEIVED, RECEIVED, CANCELLED]
+        expected_date: { $ref: '#/components/schemas/Timestamp' }
+        total_amount: { type: number, format: double }
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrderLine'
+        created_by: { $ref: '#/components/schemas/UUID' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    SalesOrderLine:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        so_id: { $ref: '#/components/schemas/UUID' }
+        item_id: { $ref: '#/components/schemas/UUID' }
+        qty: { type: integer }
+        unit_price: { type: number, format: double }
+        tax: { type: number, format: double }
+        reserved: { type: boolean }
+    SalesOrder:
+      type: object
+      required: [id, so_number, status, created_by, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        so_number: { type: string }
+        customer_id: { $ref: '#/components/schemas/UUID' }
+        status:
+          type: string
+          enum: [DRAFT, CONFIRMED, PICKING, SHIPPED, INVOICED, CANCELLED, RETURNED]
+        total_amount: { type: number, format: double }
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalesOrderLine'
+        created_by: { $ref: '#/components/schemas/UUID' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    Transfer:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        transfer_number: { type: string }
+        from_location_id: { $ref: '#/components/schemas/UUID' }
+        to_location_id: { $ref: '#/components/schemas/UUID' }
+        status:
+          type: string
+          enum: [DRAFT, IN_TRANSIT, RECEIVED, CANCELLED]
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { $ref: '#/components/schemas/UUID' }
+              transfer_id: { $ref: '#/components/schemas/UUID' }
+              item_id: { $ref: '#/components/schemas/UUID' }
+              qty: { type: integer }
+        created_by: { $ref: '#/components/schemas/UUID' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    Adjustment:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        item_id: { $ref: '#/components/schemas/UUID' }
+        location_id: { $ref: '#/components/schemas/UUID' }
+        qty_change: { type: integer }
+        reason:
+          type: string
+          enum: [COUNT, DAMAGE, CORRECTION, OTHER]
+        note: { type: string }
+        created_by: { $ref: '#/components/schemas/UUID' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    Job:
+      type: object
+      properties:
+        job_id: { type: string }
+        type: { type: string }
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, SUCCESS, FAILED, PARTIAL_SUCCESS]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        result_url: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              row: { type: integer }
+              message: { type: string }
+    WebhookEvent:
+      type: object
+      properties:
+        event: { type: string }
+        timestamp: { $ref: '#/components/schemas/Timestamp' }
+        data: { type: object }
+
+  examples:
+    ItemExample:
+      summary: Example item
+      value:
+        id: "11111111-1111-1111-1111-111111111111"
+        sku: "ABC-123"
+        name: "Acme Hammer"
+        unit: "ea"
+        cost_price: 10.5
+        sale_price: 15.0
+        active: true
+        created_at: "2025-10-01T12:00:00Z"
+        updated_at: "2025-10-10T08:30:00Z"
+    StockMovementExample:
+      summary: Example stock movement
+      value:
+        id: "22222222-2222-2222-2222-222222222222"
+        item_id: "11111111-1111-1111-1111-111111111111"
+        location_id: "33333333-3333-3333-3333-333333333333"
+        change_qty: 10
+        type: "RECEIVE"
+        ref_type: "purchase_order"
+        ref_id: "44444444-4444-4444-4444-444444444444"
+        user_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        created_at: "2025-12-02T10:00:00Z"
+
+paths:
+  /auth/login:
+    post:
+      summary: Obtain JWT access token (for sandbox; production use API key via RapidAPI)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  refresh_token: { type: string }
+                  expires_in: { type: integer }
+                  token_type: { type: string, example: bearer }
+        '401':
+          description: invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /items:
+    get:
+      summary: List items (supports page/per_page or cursor)
+      tags: [Items]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+        - name: sku
+          in: query
+          schema: { type: string }
+        - name: name
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: active
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: items with pagination meta or cursor meta
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Item'
+                      meta:
+                        $ref: '#/components/schemas/PagingMeta'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Item'
+                      cursor:
+                        $ref: '#/components/schemas/CursorMeta'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create item (idempotent)
+      tags: [Items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Item'
+            examples:
+              example-1:
+                $ref: '#/components/examples/ItemExample'
+      responses:
+        '201':
+          description: created item
+          headers:
+            ETag:
+              description: ETag value for optimistic concurrency
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: conflict (e.g., SKU already exists)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/UUID' }
+
+    get:
+      summary: Retrieve item by id
+      tags: [Items]
+      responses:
+        '200':
+          description: item
+          headers:
+            ETag:
+              description: current resource ETag (use for If-Match on updates)
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Full update item (optimistic concurrency)
+      tags: [Items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Item'
+      responses:
+        '200':
+          description: updated
+          headers:
+            ETag:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '412':
+          description: Precondition Failed (ETag/timestamp mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      summary: Partial update item (optimistic concurrency)
+      tags: [Items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: updated
+          headers:
+            ETag:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '412':
+          description: Precondition Failed (ETag/timestamp mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete item (soft-delete)
+      tags: [Items]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '204':
+          description: deleted
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /items/search:
+    get:
+      summary: Search items (fuzzy by name, sku, barcode) - low-latency indexed endpoint for POS
+      tags: [Items]
+      parameters:
+        - name: q
+          in: query
+          description: Query string for fuzzy search
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, maximum: 100 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Item'
+        '400':
+          description: invalid query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /locations:
+    get:
+      summary: List locations
+      tags: [Locations]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: paged locations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Location'
+                  meta:
+                    $ref: '#/components/schemas/PagingMeta'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create location
+      tags: [Locations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Location'
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Location'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stock:
+    get:
+      summary: Query stock levels (optionally include recent movements)
+      tags: [Stock]
+      parameters:
+        - name: item_id
+          in: query
+          schema: { $ref: '#/components/schemas/UUID' }
+        - name: location_id
+          in: query
+          schema: { $ref: '#/components/schemas/UUID' }
+        - $ref: '#/components/parameters/include_movements'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: stock level snapshots (with optional recent_movements)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockLevel'
+                  meta:
+                    $ref: '#/components/schemas/PagingMeta'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stock/search:
+    get:
+      summary: Low-latency stock lookup by sku or barcode (POS-friendly)
+      tags: [Stock]
+      parameters:
+        - name: sku
+          in: query
+          schema: { type: string }
+        - name: barcode
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: single stock snapshot per matching SKU/barcode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockLevel'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stock/adjust:
+    post:
+      summary: Create manual stock adjustment (creates StockMovement)
+      tags: [Stock]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id, location_id, qty_change, reason]
+              properties:
+                item_id: { $ref: '#/components/schemas/UUID' }
+                location_id: { $ref: '#/components/schemas/UUID' }
+                qty_change: { type: integer }
+                reason:
+                  type: string
+                  enum: [COUNT, DAMAGE, CORRECTION, OTHER]
+                note: { type: string }
+      responses:
+        '201':
+          description: adjustment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adjustment'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /purchase_orders:
+    post:
+      summary: Create purchase order (idempotent)
+      tags: [PurchaseOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id, lines]
+              properties:
+                supplier_id: { $ref: '#/components/schemas/UUID' }
+                expected_date: { $ref: '#/components/schemas/Timestamp' }
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [item_id, qty_ordered, unit_cost]
+                    properties:
+                      item_id: { $ref: '#/components/schemas/UUID' }
+                      qty_ordered: { type: integer }
+                      unit_cost: { type: number, format: double }
+      responses:
+        '201':
+          description: PO created
+          headers:
+            ETag:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /purchase_orders/{poId}:
+    parameters:
+      - name: poId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/UUID'
+      - $ref: '#/components/parameters/tenant'
+    get:
+      summary: Get purchase order by id
+      tags: [PurchaseOrders]
+      responses:
+        '200':
+          description: po
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /purchase_orders/{poId}/receive:
+    post:
+      summary: Receive items for a PO (partial allowed) — writes StockMovement records
+      tags: [PurchaseOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: poId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [received_lines, destination_location_id]
+              properties:
+                received_lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [po_line_id, qty_received]
+                    properties:
+                      po_line_id: { $ref: '#/components/schemas/UUID' }
+                      qty_received: { type: integer }
+                receive_date: { $ref: '#/components/schemas/Timestamp' }
+                destination_location_id: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: receipt processed; stock_movements returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  po:
+                    $ref: '#/components/schemas/PurchaseOrder'
+                  stock_movements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockMovement'
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sales_orders:
+    post:
+      summary: Create sales order (optionally reserve) - idempotent
+      tags: [SalesOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines]
+              properties:
+                customer_id: { $ref: '#/components/schemas/UUID' }
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [item_id, qty, unit_price]
+                    properties:
+                      item_id: { $ref: '#/components/schemas/UUID' }
+                      qty: { type: integer }
+                      unit_price: { type: number, format: double }
+                should_reserve:
+                  type: boolean
+                  default: true
+                fulfillment_location_id:
+                  $ref: '#/components/schemas/UUID'
+      responses:
+        '201':
+          description: sales order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesOrder'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sales_orders/{soId}/ship:
+    post:
+      summary: Ship sales order (converts reserve to sale)
+      tags: [SalesOrders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: soId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines]
+              properties:
+                ship_date: { $ref: '#/components/schemas/Timestamp' }
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [so_line_id, qty_shipped]
+                    properties:
+                      so_line_id: { $ref: '#/components/schemas/UUID' }
+                      qty_shipped: { type: integer }
+                tracking: { type: string }
+                carrier: { type: string }
+      responses:
+        '200':
+          description: shipment processed; returns so and stock_movements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  so:
+                    $ref: '#/components/schemas/SalesOrder'
+                  stock_movements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockMovement'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transfers:
+    post:
+      summary: Create transfer between locations (idempotent)
+      tags: [Transfers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_location_id, to_location_id, lines]
+              properties:
+                from_location_id: { $ref: '#/components/schemas/UUID' }
+                to_location_id: { $ref: '#/components/schemas/UUID' }
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [item_id, qty]
+                    properties:
+                      item_id: { $ref: '#/components/schemas/UUID' }
+                      qty: { type: integer }
+      responses:
+        '201':
+          description: transfer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transfer'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /transfers/{transferId}/receive:
+    post:
+      summary: Receive transfer at destination
+      tags: [Transfers]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/UUID' }
+        - $ref: '#/components/parameters/tenant'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [received_lines]
+              properties:
+                received_lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [transfer_line_id, qty_received]
+                    properties:
+                      transfer_line_id: { $ref: '#/components/schemas/UUID' }
+                      qty_received: { type: integer }
+      responses:
+        '200':
+          description: transfer received; returns transfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transfer'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /returns:
+    post:
+      summary: Create a return and update stock
+      tags: [Returns]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines, destination_location_id]
+              properties:
+                related_so_id: { $ref: '#/components/schemas/UUID' }
+                lines:
+                  type: array
+                  items:
+                    type: object
+                    required: [item_id, qty, reason]
+                    properties:
+                      item_id: { $ref: '#/components/schemas/UUID' }
+                      qty: { type: integer }
+                      reason: { type: string }
+                destination_location_id: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '201':
+          description: return created and stock updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  return_id: { $ref: '#/components/schemas/UUID' }
+                  stock_movements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockMovement'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /adjustments:
+    post:
+      summary: Create adjustment (alias to /stock/adjust)
+      tags: [Adjustments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Adjustment'
+      responses:
+        '201':
+          description: adjustment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adjustment'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reports/low_stock:
+    get:
+      summary: Low stock report (cursor-capable)
+      tags: [Reports]
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: threshold
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: low stock items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        item:
+                          $ref: '#/components/schemas/Item'
+                        stock:
+                          $ref: '#/components/schemas/StockLevel'
+                  cursor:
+                    $ref: '#/components/schemas/CursorMeta'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /reports/stock_valuation:
+    get:
+      summary: Stock valuation by location and method
+      tags: [Reports]
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: location_id
+          in: query
+          schema: { $ref: '#/components/schemas/UUID' }
+        - name: valuation_method
+          in: query
+          schema:
+            type: string
+            enum: [FIFO, LIFO, AVG]
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: valuation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        item: { $ref: '#/components/schemas/Item' }
+                        valuation: { type: number, format: double }
+                  cursor:
+                    $ref: '#/components/schemas/CursorMeta'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /exports/stock_csv:
+    get:
+      summary: Export stock CSV stream
+      tags: [Exports]
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: location_id
+          in: query
+          schema: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: CSV stream
+          content:
+            text/csv:
+              schema:
+                type: string
+              examples:
+                csv:
+                  value: "sku,name,location,qty_on_hand\nABC-123,Acme Hammer,Main Warehouse,100\n"
+
+  /webhooks/register:
+    post:
+      summary: Register webhook subscription (server will sign deliveries with HMAC)
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [order.created, order.shipped, po.received, stock.low, stock.changed]
+                secret:
+                  type: string
+                  description: Optional secret used to sign payloads; if not provided server generates one
+      responses:
+        '201':
+          description: webhook subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { $ref: '#/components/schemas/UUID' }
+                  url: { type: string }
+                  events:
+                    type: array
+                    items: { type: string }
+                  secret:
+                    type: string
+                    description: Returned only on creation; store securely
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhooks/deliveries:
+    get:
+      summary: List webhook deliveries and failures (admin)
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { $ref: '#/components/schemas/UUID' }
+                        subscription_id: { $ref: '#/components/schemas/UUID' }
+                        status: { type: string }
+                        http_status: { type: integer }
+                        attempts: { type: integer }
+                        last_attempt_at: { $ref: '#/components/schemas/Timestamp' }
+                  meta:
+                    $ref: '#/components/schemas/PagingMeta'
+
+  /webhooks/test:
+    post:
+      summary: Test webhook delivery endpoint for admins (queues test delivery)
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subscription_id: { $ref: '#/components/schemas/UUID' }
+                event: { type: string }
+      responses:
+        '202':
+          description: test queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued: { type: boolean }
+
+  /jobs:
+    post:
+      summary: Enqueue async job (import/export/process) - returns job_id
+      tags: [Jobs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, payload]
+              properties:
+                type:
+                  type: string
+                  description: job type, e.g., import_items, export_stock
+                payload:
+                  type: object
+      responses:
+        '202':
+          description: job queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /jobs/{jobId}:
+    get:
+      summary: Get job status and results
+      tags: [Jobs]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: job info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /audit_logs:
+    get:
+      summary: Query audit logs (filterable)
+      tags: [Audit]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entity
+          in: query
+          schema: { type: string }
+        - name: entity_id
+          in: query
+          schema: { $ref: '#/components/schemas/UUID' }
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { $ref: '#/components/schemas/UUID' }
+                        entity: { type: string }
+                        entity_id: { $ref: '#/components/schemas/UUID' }
+                        action: { type: string }
+                        old_value: { type: object }
+                        new_value: { type: object }
+                        user_id: { $ref: '#/components/schemas/UUID' }
+                        ip: { type: string }
+                        user_agent: { type: string }
+                        timestamp: { $ref: '#/components/schemas/Timestamp' }
+                  meta:
+                    $ref: '#/components/schemas/PagingMeta'
+
+  /healthz:
+    get:
+      summary: Health check
+      tags: [Health]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  version: { type: string }
+                  db: { type: string, enum: [ok, degraded, down] }
+
+tags:
+  - name: Auth
+    description: Authentication and token endpoints
+  - name: Items
+    description: Item master and search
+  - name: Locations
+    description: Warehouse/store locations
+  - name: Stock
+    description: Stock snapshots and movements
+  - name: PurchaseOrders
+    description: Purchase order lifecycle and receiving
+  - name: SalesOrders
+    description: Sales order lifecycle and shipping
+  - name: Transfers
+    description: Internal stock transfers
+  - name: Returns
+    description: Returns processing
+  - name: Adjustments
+    description: Manual adjustments and corrections
+  - name: Reports
+    description: Low stock and valuation reports
+  - name: Webhooks
+    description: Webhook management and deliveries
+  - name: Jobs
+    description: Async job management (imports/exports)
+  - name: Audit
+    description: Audit logs and traceability
+  - name: Exports
+    description: Export endpoints (CSV)
+  - name: Health
+    description: System health and status
+
+externalDocs:
+  description: Implementation notes, migration guide, SDKs, and examples
+  url: https://api.thewarehousehub.com/docs/migration-v1.1.0
+
