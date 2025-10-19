@@ -182,24 +182,17 @@ mod tests {
 
     fn create_test_user() -> User {
         let email = Email::new("test@example.com".to_string()).unwrap();
-        let password_hash = PasswordHash::from_hash("$2b$12$kQMaeUg9psmEZ/L6aS/d6.YrMZv5VCym3ebSX7D1.3lvT3iq6/wfC".to_string());
-        User::new(
-            email,
-            password_hash,
-            "Test".to_string(),
-            "User".to_string(),
-        ).unwrap()
+        let password_hash = PasswordHash::from_hash(
+            "$2b$12$kQMaeUg9psmEZ/L6aS/d6.YrMZv5VCym3ebSX7D1.3lvT3iq6/wfC".to_string(),
+        );
+        User::new(email, password_hash, "Test".to_string(), "User".to_string()).unwrap()
     }
 
     #[tokio::test]
     async fn test_login_success() {
         let user = create_test_user();
         let mock_repo = MockUserRepository::new().with_user(user.clone());
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "test@example.com".to_string(),
@@ -219,11 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_invalid_email() {
         let mock_repo = MockUserRepository::new();
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "invalid-email".to_string(),
@@ -232,17 +221,16 @@ mod tests {
 
         let result = use_case.execute(request).await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), DomainError::ValidationError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            DomainError::ValidationError(_)
+        ));
     }
 
     #[tokio::test]
     async fn test_login_user_not_found() {
         let mock_repo = MockUserRepository::new();
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "notfound@example.com".to_string(),
@@ -259,11 +247,7 @@ mod tests {
     async fn test_login_wrong_password() {
         let user = create_test_user();
         let mock_repo = MockUserRepository::new().with_user(user);
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "test@example.com".to_string(),
@@ -281,11 +265,7 @@ mod tests {
         let mut user = create_test_user();
         user.deactivate();
         let mock_repo = MockUserRepository::new().with_user(user);
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "test@example.com".to_string(),
@@ -295,17 +275,15 @@ mod tests {
         let result = use_case.execute(request).await;
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(matches!(error, DomainError::ValidationError(msg) if msg == "Account is deactivated"));
+        assert!(
+            matches!(error, DomainError::ValidationError(msg) if msg == "Account is deactivated")
+        );
     }
 
     #[tokio::test]
     async fn test_login_database_error() {
         let mock_repo = MockUserRepository::new().with_failure();
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "test@example.com".to_string(),
@@ -320,11 +298,7 @@ mod tests {
     async fn test_jwt_token_structure() {
         let user = create_test_user();
         let mock_repo = MockUserRepository::new().with_user(user.clone());
-        let use_case = LoginUseCase::new(
-            Arc::new(mock_repo),
-            "test-secret".to_string(),
-            24,
-        );
+        let use_case = LoginUseCase::new(Arc::new(mock_repo), "test-secret".to_string(), 24);
 
         let request = LoginRequest {
             email: "test@example.com".to_string(),
@@ -339,7 +313,8 @@ mod tests {
             &result.token,
             &DecodingKey::from_secret("test-secret".as_ref()),
             &Validation::default(),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(token_data.claims.sub, user.id.to_string());
         assert_eq!(token_data.claims.email, "test@example.com");
