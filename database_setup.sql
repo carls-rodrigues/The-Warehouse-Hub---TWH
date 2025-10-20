@@ -213,3 +213,42 @@ CREATE TABLE IF NOT EXISTS search_indexes (
 CREATE INDEX IF NOT EXISTS idx_search_indexes_vector ON search_indexes USING gin(search_vector);
 CREATE INDEX IF NOT EXISTS idx_search_indexes_entity ON search_indexes(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_search_indexes_updated ON search_indexes(updated_at);
+
+-- Purchase orders table
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    po_number VARCHAR(100) NOT NULL UNIQUE,
+    supplier_id UUID NOT NULL, -- References external supplier system
+    status VARCHAR(20) NOT NULL CHECK (status IN ('DRAFT', 'OPEN', 'RECEIVING', 'PARTIAL_RECEIVED', 'RECEIVED', 'CANCELLED')),
+    expected_date TIMESTAMPTZ,
+    total_amount DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for purchase orders
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_po_number ON purchase_orders(po_number);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_supplier ON purchase_orders(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_status ON purchase_orders(status);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_created_by ON purchase_orders(created_by);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_created_at ON purchase_orders(created_at);
+
+-- Purchase order lines table
+CREATE TABLE IF NOT EXISTS purchase_order_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    po_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES items(id),
+    qty_ordered INTEGER NOT NULL CHECK (qty_ordered > 0),
+    qty_received INTEGER NOT NULL DEFAULT 0 CHECK (qty_received >= 0),
+    unit_cost DOUBLE PRECISION NOT NULL CHECK (unit_cost >= 0),
+    line_total DOUBLE PRECISION NOT NULL CHECK (line_total >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT qty_received_not_exceeds_ordered CHECK (qty_received <= qty_ordered)
+);
+
+-- Create indexes for purchase order lines
+CREATE INDEX IF NOT EXISTS idx_po_lines_po_id ON purchase_order_lines(po_id);
+CREATE INDEX IF NOT EXISTS idx_po_lines_item_id ON purchase_order_lines(item_id);
+CREATE INDEX IF NOT EXISTS idx_po_lines_created_at ON purchase_order_lines(created_at);
