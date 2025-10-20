@@ -252,3 +252,43 @@ CREATE TABLE IF NOT EXISTS purchase_order_lines (
 CREATE INDEX IF NOT EXISTS idx_po_lines_po_id ON purchase_order_lines(po_id);
 CREATE INDEX IF NOT EXISTS idx_po_lines_item_id ON purchase_order_lines(item_id);
 CREATE INDEX IF NOT EXISTS idx_po_lines_created_at ON purchase_order_lines(created_at);
+
+-- Sales orders table
+CREATE TABLE IF NOT EXISTS sales_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    so_number VARCHAR(100) NOT NULL UNIQUE,
+    customer_id UUID, -- References external customer system
+    status VARCHAR(20) NOT NULL CHECK (status IN ('DRAFT', 'CONFIRMED', 'PICKING', 'SHIPPED', 'INVOICED', 'CANCELLED', 'RETURNED')),
+    total_amount DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
+    fulfillment_location_id UUID REFERENCES locations(id),
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for sales orders
+CREATE INDEX IF NOT EXISTS idx_sales_orders_so_number ON sales_orders(so_number);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_customer ON sales_orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_status ON sales_orders(status);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_fulfillment_location ON sales_orders(fulfillment_location_id);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_created_by ON sales_orders(created_by);
+CREATE INDEX IF NOT EXISTS idx_sales_orders_created_at ON sales_orders(created_at);
+
+-- Sales order lines table
+CREATE TABLE IF NOT EXISTS sales_order_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    so_id UUID NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES items(id),
+    qty INTEGER NOT NULL CHECK (qty > 0),
+    unit_price DOUBLE PRECISION NOT NULL CHECK (unit_price >= 0),
+    tax DOUBLE PRECISION DEFAULT 0 CHECK (tax >= 0),
+    reserved BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for sales order lines
+CREATE INDEX IF NOT EXISTS idx_so_lines_so_id ON sales_order_lines(so_id);
+CREATE INDEX IF NOT EXISTS idx_so_lines_item_id ON sales_order_lines(item_id);
+CREATE INDEX IF NOT EXISTS idx_so_lines_reserved ON sales_order_lines(reserved);
+CREATE INDEX IF NOT EXISTS idx_so_lines_created_at ON sales_order_lines(created_at);

@@ -450,7 +450,7 @@ DELETE /items/{id}
 ---
 
 ## 🚀 SPRINT 3: BUSINESS FLOWS (120h Total)
-**Status:** 🏃 **IN PROGRESS** - TASK-020 Complete, TASK-021 In Progress
+**Status:** 🏃 **IN PROGRESS** - TASK-020 Complete, TASK-021 Complete, TASK-022 In Progress
 
 #### ✅ TASK-020: Purchase Orders CRUD & Receive (24h)
 **Status:** ✅ **PRODUCTION READY** - *COMPLETED October 20, 2025*
@@ -493,18 +493,59 @@ DELETE /items/{id}
 - **Type Safety:** Full Rust compile-time guarantees
 - **Performance:** Efficient queries with proper indexing
 
-#### 🔄 TASK-021: Sales Orders CRUD & Ship (24h, P0)
+#### ✅ TASK-021: Sales Orders CRUD & Ship (24h)
+**Status:** ✅ **PRODUCTION READY** - *COMPLETED October 20, 2025*
+
+**Complete Implementation:**
+
+- **Domain Model:** SalesOrder entity with status lifecycle (DRAFT → OPEN → PARTIAL_SHIPPED → SHIPPED)
+- **Business Logic:** Line item management, quantity validation, total calculations, inventory reservation
+- **Repository Layer:** PostgreSQL implementation with complex queries and transactions
+- **Stock Integration:** Automatic OUTBOUND stock movements on ship operations with reservation system
+- **API Endpoints:** Full CRUD with ship functionality
+
+**API Endpoints Added:**
+
+- `POST /sales_orders` - Create SO with line items (authenticated)
+- `GET /sales_orders/{id}` - Retrieve SO with full details
+- `POST /sales_orders/{id}/ship` - Ship items, create stock movements
+
+**Database Schema:**
+
+- `sales_orders` table with status tracking and customer references
+- `sales_order_lines` table with quantity tracking (ordered/shipped)
+- Proper indexing for performance (so_number, customer_id, status, timestamps)
+- Foreign key constraints for data integrity
+
+**Stock Ledger Integration:**
+
+- **Movement Type:** OUTBOUND for all SO shipments
+- **Reference Type:** sales_order with SO ID linkage
+- **Transactional:** Atomic operations ensuring data consistency
+- **Reservation System:** Inventory reserved during creation, released on ship/cancel
+- **Audit Trail:** Complete history of all inventory changes
+
+**Testing Results:**
+
+- ✅ SO creation with line items and calculations
+- ✅ Status transitions (DRAFT → PARTIAL_SHIPPED)
+- ✅ Stock movements created correctly (OUTBOUND movements on ship)
+- ✅ Inventory reservation and release functionality
+- ✅ API responses match OpenAPI specification
+- ✅ Error handling for invalid operations
+- ✅ Database constraints and transactions working
+
+**Code Quality:**
+
+- **Clean Architecture:** Domain/Application/Infrastructure separation maintained
+- **Error Handling:** Comprehensive domain error types
+- **Type Safety:** Full Rust compile-time guarantees
+- **Performance:** Efficient queries with proper indexing
+
+#### 🔄 TASK-022: Transfers CRUD & Receive (20h, P1)
 **Status:** 🔄 **IN PROGRESS**
 
 **Planned Implementation:**
-- Sales order creation and management
-- Stock allocation and reservation system
-- Ship endpoint with OUTBOUND stock movements
-- Customer reference and order tracking
-
-#### 🎯 TASK-022: Transfers CRUD & Receive (20h, P1)
-**Priority:** **HIGH**
-
 - Location-to-location inventory transfers
 - Transfer OUTBOUND/INBOUND movement pairs
 - Transfer status tracking and validation

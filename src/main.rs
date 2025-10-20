@@ -23,12 +23,14 @@ use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_location_repository::PostgresLocationRepository,
     postgres_purchase_order_repository::PostgresPurchaseOrderRepository,
+    postgres_sales_order_repository::PostgresSalesOrderRepository,
     postgres_search_repository::PostgresSearchRepository,
     postgres_stock_repository::PostgresStockRepository,
     postgres_user_repository::PostgresUserRepository,
 };
 use crate::presentation::routes::{
-    create_purchase_order_routes, create_stock_routes, search::create_search_routes,
+    create_purchase_order_routes, create_stock_routes, sales_order::sales_order_routes,
+    search::create_search_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -45,6 +47,7 @@ pub struct AppState {
     pub item_repository: Arc<PostgresItemRepository>,
     pub location_repository: Arc<PostgresLocationRepository>,
     pub purchase_order_repository: Arc<PostgresPurchaseOrderRepository>,
+    pub sales_order_repository: Arc<PostgresSalesOrderRepository>,
     pub stock_repository: Arc<PostgresStockRepository>,
     pub search_repository: Arc<PostgresSearchRepository>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
@@ -115,6 +118,7 @@ async fn main() {
     let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
     let purchase_order_repository =
         Arc::new(PostgresPurchaseOrderRepository::new(Arc::clone(&pool)));
+    let sales_order_repository = Arc::new(PostgresSalesOrderRepository::new(Arc::clone(&pool)));
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
     let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
 
@@ -183,6 +187,7 @@ async fn main() {
         item_repository: Arc::clone(&item_repository),
         location_repository: Arc::clone(&location_repository),
         purchase_order_repository: Arc::clone(&purchase_order_repository),
+        sales_order_repository: Arc::clone(&sales_order_repository),
         stock_repository: Arc::clone(&stock_repository),
         search_repository: Arc::clone(&search_repository),
         login_use_case,
@@ -223,6 +228,7 @@ async fn main() {
         .merge(create_search_routes())
         .merge(create_stock_routes())
         .merge(create_purchase_order_routes())
+        .merge(sales_order_routes())
         .with_state(app_state);
 
     // Run the server
