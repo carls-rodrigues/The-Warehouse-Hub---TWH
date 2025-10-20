@@ -43,10 +43,14 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         .bind(key.updated_at)
         .execute(&*self.pool)
         .await
-        .map_err(|e| DomainError::ValidationError(format!("Failed to store idempotency key: {}", e)))?;
+        .map_err(|e| {
+            DomainError::ValidationError(format!("Failed to store idempotency key: {}", e))
+        })?;
 
         if result.rows_affected() == 0 {
-            return Err(DomainError::Conflict("Idempotency key already exists".to_string()));
+            return Err(DomainError::Conflict(
+                "Idempotency key already exists".to_string(),
+            ));
         }
 
         Ok(())
@@ -65,21 +69,43 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         .bind(idempotency_key)
         .fetch_optional(&*self.pool)
         .await
-        .map_err(|e| DomainError::ValidationError(format!("Failed to get idempotency key: {}", e)))?;
+        .map_err(|e| {
+            DomainError::ValidationError(format!("Failed to get idempotency key: {}", e))
+        })?;
 
         match row {
             Some(row) => {
                 let key = IdempotencyKey {
-                    id: row.try_get("id").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    idempotency_key: row.try_get("idempotency_key").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    request_path: row.try_get("request_path").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    request_method: row.try_get("request_method").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    request_body_hash: row.try_get("request_body_hash").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    response_status: row.try_get("response_status").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    response_body: row.try_get("response_body").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    expires_at: row.try_get("expires_at").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    created_at: row.try_get("created_at").map_err(|e| DomainError::ValidationError(e.to_string()))?,
-                    updated_at: row.try_get("updated_at").map_err(|e| DomainError::ValidationError(e.to_string()))?,
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| DomainError::ValidationError(e.to_string()))?,
+                    idempotency_key: row
+                        .try_get("idempotency_key")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    request_path: row
+                        .try_get("request_path")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    request_method: row
+                        .try_get("request_method")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    request_body_hash: row
+                        .try_get("request_body_hash")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    response_status: row
+                        .try_get("response_status")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    response_body: row
+                        .try_get("response_body")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    expires_at: row
+                        .try_get("expires_at")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+                    updated_at: row
+                        .try_get("updated_at")
+                        .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
                 };
 
                 Ok(Some(key))
@@ -106,10 +132,14 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         .bind(idempotency_key)
         .execute(&*self.pool)
         .await
-        .map_err(|e| DomainError::ValidationError(format!("Failed to complete idempotency key: {}", e)))?;
+        .map_err(|e| {
+            DomainError::DatabaseError(format!("Failed to complete idempotency key: {}", e))
+        })?;
 
         if result.rows_affected() == 0 {
-            return Err(DomainError::NotFound("Idempotency key not found or already completed".to_string()));
+            return Err(DomainError::NotFound(
+                "Idempotency key not found or already completed".to_string(),
+            ));
         }
 
         Ok(())
@@ -119,7 +149,9 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         let result = sqlx::query("DELETE FROM idempotency_keys WHERE expires_at <= NOW()")
             .execute(&*self.pool)
             .await
-            .map_err(|e| DomainError::ValidationError(format!("Failed to delete expired keys: {}", e)))?;
+            .map_err(|e| {
+                DomainError::DatabaseError(format!("Failed to delete expired keys: {}", e))
+            })?;
 
         Ok(result.rows_affected() as i64)
     }
@@ -131,7 +163,7 @@ impl IdempotencyRepository for PostgresIdempotencyRepository {
         .bind(idempotency_key)
         .fetch_one(&*self.pool)
         .await
-        .map_err(|e| DomainError::ValidationError(format!("Failed to check key existence: {}", e)))?;
+        .map_err(|e| DomainError::DatabaseError(format!("Failed to check key existence: {}", e)))?;
 
         Ok(count.0 > 0)
     }

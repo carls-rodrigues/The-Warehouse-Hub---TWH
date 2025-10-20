@@ -7,7 +7,24 @@
 
 ---
 
-# Requirements and success criteria
+## Current Development Status
+
+**Sprint 2: Core Ledger Infrastructure** - *75% Complete*  
+**Status:** Active development with 3 of 4 core tasks completed  
+**Progress Report:** See [SPRINT_2_PROGRESS.md](SPRINT_2_PROGRESS.md) for detailed implementation status
+
+**Completed Infrastructure:**
+- ✅ Stock Management Ledger (TASK-004) - Immutable ledger with transactional snapshots
+- ✅ Idempotency Middleware (TASK-005) - Dual-storage Redis/PostgreSQL resilience
+- ✅ Search Indexing Pipeline (TASK-008) - Full-text search with automatic indexing
+
+**Remaining Tasks:**
+- 🔄 Stock Search API Endpoints (TASK-030)
+- 🔄 Items Search Endpoint (TASK-031)
+
+---
+
+## Requirements and success criteria
 
 ## Functional requirements
 - Public OpenAPI 3.0 contract implementing items, stock, purchase_orders, sales_orders, transfers, adjustments, webhooks, jobs, audit, reports, exports, auth.
@@ -34,7 +51,7 @@
 
 ---
 
-# Architecture and design
+## Architecture and design
 
 ## High-level architecture
 - API Gateway → Domain Services (Items, Stock, Orders, Webhooks, Jobs, Reports, Audit) → Command Service → Event Bus → Projections/Read Stores → Webhook Dispatcher → Object Storage/Artifacts → Admin Console.
@@ -65,7 +82,7 @@
 
 ---
 
-# API contract and developer experience
+## API contract and developer experience
 
 ## OpenAPI & SDKs
 - Single source OpenAPI 3.0 YAML (v1.1.0) published and versioned.  
@@ -86,7 +103,7 @@
 
 ---
 
-# Deployment, CI/CD and infrastructure
+## Deployment, CI/CD and infrastructure
 
 ## Minimal self-hosted stack (solo-founder start)
 - Reverse proxy (NGINX/Traefik) for TLS and routing.  
@@ -109,7 +126,7 @@
 
 ---
 
-# Testing, observability and operations
+## Testing, observability and operations
 
 ## Testing strategy
 - Unit tests for business rules and command validations.  
@@ -134,7 +151,7 @@
 
 ---
 
-# Security, compliance and governance
+## Security, compliance and governance
 
 ## Authentication & authorization
 - JWT + API keys; scopes per endpoint; admin RBAC for console; optional SAML/OIDC SSO for Enterprise.
@@ -154,7 +171,7 @@
 
 ---
 
-# Product roadmap, deliverables and diagram artifacts
+## Product roadmap, deliverables and diagram artifacts
 
 ## Immediate (0–4 weeks)
 - Finalize and publish OpenAPI v1.1.0.  
@@ -182,7 +199,7 @@
 
 ---
 
-# Governance, contributors and templates
+## Governance, contributors and templates
 
 ## Roles and responsibilities
 - Owner: Carlos — product, dev, ops.  
