@@ -7,9 +7,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::application::use_cases::{
-    create_purchase_order::{CreatePurchaseOrderUseCase, CreatePurchaseOrderUseCaseRequest, CreatePurchaseOrderResponse},
-    get_purchase_order::{GetPurchaseOrderUseCase, GetPurchaseOrderResponse},
-    receive_purchase_order::{ReceivePurchaseOrderUseCase, ReceivePurchaseOrderUseCaseRequest, ReceivePurchaseOrderResponse},
+    create_purchase_order::{
+        CreatePurchaseOrderResponse, CreatePurchaseOrderUseCase, CreatePurchaseOrderUseCaseRequest,
+    },
+    get_purchase_order::{GetPurchaseOrderResponse, GetPurchaseOrderUseCase},
+    receive_purchase_order::{
+        ReceivePurchaseOrderResponse, ReceivePurchaseOrderUseCase,
+        ReceivePurchaseOrderUseCaseRequest,
+    },
 };
 use crate::domain::entities::purchase_order::{CreatePurchaseOrderLine, ReceiveLine};
 use crate::shared::error::DomainError;
@@ -70,11 +75,7 @@ pub async fn get_purchase_order(
     State(state): State<AppState>,
     Path(po_id): Path<Uuid>,
 ) -> Result<Json<GetPurchaseOrderResponse>, (StatusCode, Json<ErrorResponse>)> {
-    match state
-        .get_purchase_order_use_case
-        .execute(po_id)
-        .await
-    {
+    match state.get_purchase_order_use_case.execute(po_id).await {
         Ok(response) => Ok(Json(response)),
         Err(e) => {
             if e.to_string().contains("not found") {

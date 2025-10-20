@@ -35,11 +35,16 @@ pub struct GetPurchaseOrderUseCase<R: PurchaseOrderRepository> {
 
 impl<R: PurchaseOrderRepository> GetPurchaseOrderUseCase<R> {
     pub fn new(purchase_order_repository: Arc<R>) -> Self {
-        Self { purchase_order_repository }
+        Self {
+            purchase_order_repository,
+        }
     }
 
     pub async fn execute(&self, id: Uuid) -> Result<GetPurchaseOrderResponse, DomainError> {
-        let po = self.purchase_order_repository.find_by_id(id).await?
+        let po = self
+            .purchase_order_repository
+            .find_by_id(id)
+            .await?
             .ok_or_else(|| DomainError::ValidationError("Purchase order not found".to_string()))?;
 
         Ok(GetPurchaseOrderResponse {
@@ -47,23 +52,39 @@ impl<R: PurchaseOrderRepository> GetPurchaseOrderUseCase<R> {
             po_number: po.po_number,
             supplier_id: po.supplier_id,
             status: match po.status {
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Draft => "DRAFT".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Open => "OPEN".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Receiving => "RECEIVING".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::PartialReceived => "PARTIAL_RECEIVED".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Received => "RECEIVED".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Cancelled => "CANCELLED".to_string(),
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Draft => {
+                    "DRAFT".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Open => {
+                    "OPEN".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Receiving => {
+                    "RECEIVING".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::PartialReceived => {
+                    "PARTIAL_RECEIVED".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Received => {
+                    "RECEIVED".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Cancelled => {
+                    "CANCELLED".to_string()
+                }
             },
             expected_date: po.expected_date,
             total_amount: po.total_amount,
-            lines: po.lines.into_iter().map(|line| PurchaseOrderLineResponse {
-                id: line.id,
-                item_id: line.item_id,
-                qty_ordered: line.qty_ordered,
-                qty_received: line.qty_received,
-                unit_cost: line.unit_cost,
-                line_total: line.line_total,
-            }).collect(),
+            lines: po
+                .lines
+                .into_iter()
+                .map(|line| PurchaseOrderLineResponse {
+                    id: line.id,
+                    item_id: line.item_id,
+                    qty_ordered: line.qty_ordered,
+                    qty_received: line.qty_received,
+                    unit_cost: line.unit_cost,
+                    line_total: line.line_total,
+                })
+                .collect(),
             created_by: po.created_by,
             created_at: po.created_at,
             updated_at: po.updated_at,

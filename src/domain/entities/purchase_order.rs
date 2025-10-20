@@ -131,7 +131,8 @@ impl PurchaseOrder {
         let mut total_amount = 0.0;
 
         for line_req in lines {
-            let mut line = PurchaseOrderLine::new(line_req.item_id, line_req.qty_ordered, line_req.unit_cost)?;
+            let mut line =
+                PurchaseOrderLine::new(line_req.item_id, line_req.qty_ordered, line_req.unit_cost)?;
             line.po_id = Uuid::nil(); // Will be set after PO creation
             total_amount += line.line_total;
             po_lines.push(line);
@@ -173,7 +174,9 @@ impl PurchaseOrder {
     }
 
     pub fn cancel(&mut self) -> Result<(), DomainError> {
-        if self.status == PurchaseOrderStatus::Received || self.status == PurchaseOrderStatus::Cancelled {
+        if self.status == PurchaseOrderStatus::Received
+            || self.status == PurchaseOrderStatus::Cancelled
+        {
             return Err(DomainError::ValidationError(
                 "Cannot cancel a received or already cancelled purchase order".to_string(),
             ));
@@ -184,7 +187,9 @@ impl PurchaseOrder {
     }
 
     pub fn receive_lines(&mut self, received_lines: Vec<ReceiveLine>) -> Result<(), DomainError> {
-        if self.status == PurchaseOrderStatus::Cancelled || self.status == PurchaseOrderStatus::Received {
+        if self.status == PurchaseOrderStatus::Cancelled
+            || self.status == PurchaseOrderStatus::Received
+        {
             return Err(DomainError::ValidationError(
                 "Cannot receive lines on cancelled or fully received purchase order".to_string(),
             ));
@@ -193,11 +198,16 @@ impl PurchaseOrder {
         self.status = PurchaseOrderStatus::Receiving;
 
         for receive_req in received_lines {
-            let line = self.lines.iter_mut()
+            let line = self
+                .lines
+                .iter_mut()
                 .find(|l| l.id == receive_req.po_line_id)
-                .ok_or_else(|| DomainError::ValidationError(
-                    format!("Purchase order line {} not found", receive_req.po_line_id),
-                ))?;
+                .ok_or_else(|| {
+                    DomainError::ValidationError(format!(
+                        "Purchase order line {} not found",
+                        receive_req.po_line_id
+                    ))
+                })?;
 
             line.receive(receive_req.qty_received)?;
         }

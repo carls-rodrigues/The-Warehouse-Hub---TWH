@@ -1,4 +1,6 @@
-use crate::domain::entities::purchase_order::{PurchaseOrder, CreatePurchaseOrderRequest, ReceivePurchaseOrderRequest};
+use crate::domain::entities::purchase_order::{
+    CreatePurchaseOrderRequest, PurchaseOrder, ReceivePurchaseOrderRequest,
+};
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use uuid::Uuid;
@@ -9,7 +11,10 @@ pub trait PurchaseOrderRepository: Send + Sync {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<PurchaseOrder>, DomainError>;
 
     /// Find a purchase order by its PO number
-    async fn find_by_po_number(&self, po_number: &str) -> Result<Option<PurchaseOrder>, DomainError>;
+    async fn find_by_po_number(
+        &self,
+        po_number: &str,
+    ) -> Result<Option<PurchaseOrder>, DomainError>;
 
     /// Save a new purchase order
     async fn save(&self, po: &PurchaseOrder) -> Result<(), DomainError>;
@@ -21,7 +26,12 @@ pub trait PurchaseOrderRepository: Send + Sync {
     async fn delete(&self, id: Uuid) -> Result<(), DomainError>;
 
     /// List purchase orders with pagination and optional filtering
-    async fn list(&self, limit: i64, offset: i64, status_filter: Option<String>) -> Result<Vec<PurchaseOrder>, DomainError>;
+    async fn list(
+        &self,
+        limit: i64,
+        offset: i64,
+        status_filter: Option<String>,
+    ) -> Result<Vec<PurchaseOrder>, DomainError>;
 
     /// Count total purchase orders
     async fn count(&self, status_filter: Option<String>) -> Result<i64, DomainError>;

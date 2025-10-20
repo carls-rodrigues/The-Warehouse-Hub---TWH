@@ -1,5 +1,7 @@
 use crate::domain::entities::inventory::StockMovement;
-use crate::domain::entities::purchase_order::{PurchaseOrder, ReceivePurchaseOrderRequest, ReceiveLine};
+use crate::domain::entities::purchase_order::{
+    PurchaseOrder, ReceiveLine, ReceivePurchaseOrderRequest,
+};
 use crate::domain::services::purchase_order_repository::PurchaseOrderRepository;
 use crate::shared::error::DomainError;
 use serde::{Deserialize, Serialize};
@@ -61,7 +63,9 @@ pub struct ReceivePurchaseOrderUseCase<R: PurchaseOrderRepository> {
 
 impl<R: PurchaseOrderRepository> ReceivePurchaseOrderUseCase<R> {
     pub fn new(purchase_order_repository: Arc<R>) -> Self {
-        Self { purchase_order_repository }
+        Self {
+            purchase_order_repository,
+        }
     }
 
     pub async fn execute(
@@ -77,13 +81,19 @@ impl<R: PurchaseOrderRepository> ReceivePurchaseOrderUseCase<R> {
         };
 
         // Receive the purchase order
-        let movements = self.purchase_order_repository
+        let movements = self
+            .purchase_order_repository
             .receive_purchase_order(request.po_id, &receive_request, user_id)
             .await?;
 
         // Get updated PO
-        let po = self.purchase_order_repository.find_by_id(request.po_id).await?
-            .ok_or_else(|| DomainError::ValidationError("Purchase order not found after receive".to_string()))?;
+        let po = self
+            .purchase_order_repository
+            .find_by_id(request.po_id)
+            .await?
+            .ok_or_else(|| {
+                DomainError::ValidationError("Purchase order not found after receive".to_string())
+            })?;
 
         Ok(ReceivePurchaseOrderResponse {
             po: PurchaseOrderResponse {

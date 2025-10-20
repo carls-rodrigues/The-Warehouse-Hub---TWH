@@ -1,5 +1,8 @@
 use crate::domain::entities::inventory::StockMovement;
-use crate::domain::entities::purchase_order::{PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus, CreatePurchaseOrderRequest, ReceivePurchaseOrderRequest};
+use crate::domain::entities::purchase_order::{
+    CreatePurchaseOrderRequest, PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus,
+    ReceivePurchaseOrderRequest,
+};
 use crate::domain::services::purchase_order_repository::PurchaseOrderRepository;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
@@ -60,7 +63,11 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             "PARTIAL_RECEIVED" => PurchaseOrderStatus::PartialReceived,
             "RECEIVED" => PurchaseOrderStatus::Received,
             "CANCELLED" => PurchaseOrderStatus::Cancelled,
-            _ => return Err(DomainError::InfrastructureError("Invalid status".to_string())),
+            _ => {
+                return Err(DomainError::InfrastructureError(
+                    "Invalid status".to_string(),
+                ))
+            }
         };
 
         let mut lines = Vec::new();
@@ -90,7 +97,10 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         }))
     }
 
-    async fn find_by_po_number(&self, po_number: &str) -> Result<Option<PurchaseOrder>, DomainError> {
+    async fn find_by_po_number(
+        &self,
+        po_number: &str,
+    ) -> Result<Option<PurchaseOrder>, DomainError> {
         let result = sqlx::query!(
             r#"
             SELECT id FROM purchase_orders WHERE po_number = $1
@@ -117,8 +127,10 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             PurchaseOrderStatus::Cancelled => "CANCELLED",
         };
 
-        let mut tx = self.pool.begin().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction error: {}", e)))?;
+        let mut tx =
+            self.pool.begin().await.map_err(|e| {
+                DomainError::InfrastructureError(format!("Transaction error: {}", e))
+            })?;
 
         sqlx::query!(
             r#"
@@ -160,8 +172,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             .map_err(|e| DomainError::InfrastructureError(format!("Database error: {}", e)))?;
         }
 
-        tx.commit().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction commit error: {}", e)))?;
+        tx.commit().await.map_err(|e| {
+            DomainError::InfrastructureError(format!("Transaction commit error: {}", e))
+        })?;
 
         Ok(())
     }
@@ -176,8 +189,10 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             PurchaseOrderStatus::Cancelled => "CANCELLED",
         };
 
-        let mut tx = self.pool.begin().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction error: {}", e)))?;
+        let mut tx =
+            self.pool.begin().await.map_err(|e| {
+                DomainError::InfrastructureError(format!("Transaction error: {}", e))
+            })?;
 
         sqlx::query!(
             r#"
@@ -212,8 +227,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             .map_err(|e| DomainError::InfrastructureError(format!("Database error: {}", e)))?;
         }
 
-        tx.commit().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction commit error: {}", e)))?;
+        tx.commit().await.map_err(|e| {
+            DomainError::InfrastructureError(format!("Transaction commit error: {}", e))
+        })?;
 
         Ok(())
     }
@@ -232,7 +248,12 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         Ok(())
     }
 
-    async fn list(&self, limit: i64, offset: i64, status_filter: Option<String>) -> Result<Vec<PurchaseOrder>, DomainError> {
+    async fn list(
+        &self,
+        limit: i64,
+        offset: i64,
+        status_filter: Option<String>,
+    ) -> Result<Vec<PurchaseOrder>, DomainError> {
         let rows = if let Some(status) = &status_filter {
             sqlx::query("SELECT id FROM purchase_orders WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
                 .bind(status)
@@ -282,12 +303,16 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         request: &ReceivePurchaseOrderRequest,
         user_id: Uuid,
     ) -> Result<Vec<StockMovement>, DomainError> {
-        let mut tx = self.pool.begin().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction error: {}", e)))?;
+        let mut tx =
+            self.pool.begin().await.map_err(|e| {
+                DomainError::InfrastructureError(format!("Transaction error: {}", e))
+            })?;
 
         // Get current PO
         let Some(mut po) = self.find_by_id(po_id).await? else {
-            return Err(DomainError::ValidationError("Purchase order not found".to_string()));
+            return Err(DomainError::ValidationError(
+                "Purchase order not found".to_string(),
+            ));
         };
 
         // Receive the lines
@@ -300,7 +325,10 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         let mut movements = Vec::new();
         for receive_req in &request.received_lines {
             if receive_req.qty_received > 0 {
-                let line = po.lines.iter().find(|l| l.id == receive_req.po_line_id)
+                let line = po
+                    .lines
+                    .iter()
+                    .find(|l| l.id == receive_req.po_line_id)
                     .ok_or_else(|| DomainError::ValidationError("Line not found".to_string()))?;
 
                 let movement = StockMovement::new(
@@ -360,8 +388,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             }
         }
 
-        tx.commit().await
-            .map_err(|e| DomainError::InfrastructureError(format!("Transaction commit error: {}", e)))?;
+        tx.commit().await.map_err(|e| {
+            DomainError::InfrastructureError(format!("Transaction commit error: {}", e))
+        })?;
 
         Ok(movements)
     }

@@ -7,14 +7,13 @@ mod shared;
 use crate::application::use_cases::{
     adjust_stock::AdjustStockUseCase, create_item::CreateItemUseCase,
     create_location::CreateLocationUseCase, create_purchase_order::CreatePurchaseOrderUseCase,
-    delete_item::DeleteItemUseCase,
-    delete_location::DeleteLocationUseCase, get_item::GetItemUseCase,
-    get_location::GetLocationUseCase, get_purchase_order::GetPurchaseOrderUseCase,
-    get_stock_level::GetStockLevelUseCase,
+    delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
+    get_item::GetItemUseCase, get_location::GetLocationUseCase,
+    get_purchase_order::GetPurchaseOrderUseCase, get_stock_level::GetStockLevelUseCase,
     get_stock_movements::GetStockMovementsUseCase,
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
-    list_locations::ListLocationsUseCase, login::LoginUseCase, receive_purchase_order::ReceivePurchaseOrderUseCase,
-    search_use_case::SearchUseCaseImpl,
+    list_locations::ListLocationsUseCase, login::LoginUseCase,
+    receive_purchase_order::ReceivePurchaseOrderUseCase, search_use_case::SearchUseCaseImpl,
     update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
 };
 use crate::infrastructure::controllers::{
@@ -28,7 +27,9 @@ use crate::infrastructure::repositories::{
     postgres_stock_repository::PostgresStockRepository,
     postgres_user_repository::PostgresUserRepository,
 };
-use crate::presentation::routes::{create_purchase_order_routes, create_stock_routes, search::create_search_routes};
+use crate::presentation::routes::{
+    create_purchase_order_routes, create_stock_routes, search::create_search_routes,
+};
 use axum::{
     routing::{delete, get, post, put},
     Json, Router,
@@ -57,9 +58,11 @@ pub struct AppState {
     pub update_location_use_case: Arc<UpdateLocationUseCase<PostgresLocationRepository>>,
     pub list_locations_use_case: Arc<ListLocationsUseCase<PostgresLocationRepository>>,
     pub delete_location_use_case: Arc<DeleteLocationUseCase<PostgresLocationRepository>>,
-    pub create_purchase_order_use_case: Arc<CreatePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
+    pub create_purchase_order_use_case:
+        Arc<CreatePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
     pub get_purchase_order_use_case: Arc<GetPurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
-    pub receive_purchase_order_use_case: Arc<ReceivePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
+    pub receive_purchase_order_use_case:
+        Arc<ReceivePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
     pub search_use_case: Arc<SearchUseCaseImpl<PostgresSearchRepository>>,
     pub get_stock_level_use_case: Arc<
         GetStockLevelUseCase<
@@ -110,7 +113,8 @@ async fn main() {
     let user_repository = Arc::new(PostgresUserRepository::new(Arc::clone(&pool)));
     let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&pool)));
     let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
-    let purchase_order_repository = Arc::new(PostgresPurchaseOrderRepository::new(Arc::clone(&pool)));
+    let purchase_order_repository =
+        Arc::new(PostgresPurchaseOrderRepository::new(Arc::clone(&pool)));
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
     let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
 
@@ -144,9 +148,15 @@ async fn main() {
     let delete_location_use_case =
         Arc::new(DeleteLocationUseCase::new(Arc::clone(&location_repository)));
 
-    let create_purchase_order_use_case = Arc::new(CreatePurchaseOrderUseCase::new(Arc::clone(&purchase_order_repository)));
-    let get_purchase_order_use_case = Arc::new(GetPurchaseOrderUseCase::new(Arc::clone(&purchase_order_repository)));
-    let receive_purchase_order_use_case = Arc::new(ReceivePurchaseOrderUseCase::new(Arc::clone(&purchase_order_repository)));
+    let create_purchase_order_use_case = Arc::new(CreatePurchaseOrderUseCase::new(Arc::clone(
+        &purchase_order_repository,
+    )));
+    let get_purchase_order_use_case = Arc::new(GetPurchaseOrderUseCase::new(Arc::clone(
+        &purchase_order_repository,
+    )));
+    let receive_purchase_order_use_case = Arc::new(ReceivePurchaseOrderUseCase::new(Arc::clone(
+        &purchase_order_repository,
+    )));
 
     let search_use_case = Arc::new(SearchUseCaseImpl::new(Arc::clone(&search_repository)));
 

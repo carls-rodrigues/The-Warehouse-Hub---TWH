@@ -1,4 +1,6 @@
-use crate::domain::entities::purchase_order::{PurchaseOrder, CreatePurchaseOrderRequest, CreatePurchaseOrderLine};
+use crate::domain::entities::purchase_order::{
+    CreatePurchaseOrderLine, CreatePurchaseOrderRequest, PurchaseOrder,
+};
 use crate::domain::services::purchase_order_repository::PurchaseOrderRepository;
 use crate::shared::error::DomainError;
 use serde::{Deserialize, Serialize};
@@ -39,7 +41,9 @@ pub struct CreatePurchaseOrderUseCase<R: PurchaseOrderRepository> {
 
 impl<R: PurchaseOrderRepository> CreatePurchaseOrderUseCase<R> {
     pub fn new(purchase_order_repository: Arc<R>) -> Self {
-        Self { purchase_order_repository }
+        Self {
+            purchase_order_repository,
+        }
     }
 
     pub async fn execute(
@@ -64,22 +68,38 @@ impl<R: PurchaseOrderRepository> CreatePurchaseOrderUseCase<R> {
             po_number: po.po_number,
             supplier_id: po.supplier_id,
             status: match po.status {
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Draft => "DRAFT".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Open => "OPEN".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Receiving => "RECEIVING".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::PartialReceived => "PARTIAL_RECEIVED".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Received => "RECEIVED".to_string(),
-                crate::domain::entities::purchase_order::PurchaseOrderStatus::Cancelled => "CANCELLED".to_string(),
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Draft => {
+                    "DRAFT".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Open => {
+                    "OPEN".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Receiving => {
+                    "RECEIVING".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::PartialReceived => {
+                    "PARTIAL_RECEIVED".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Received => {
+                    "RECEIVED".to_string()
+                }
+                crate::domain::entities::purchase_order::PurchaseOrderStatus::Cancelled => {
+                    "CANCELLED".to_string()
+                }
             },
             total_amount: po.total_amount,
-            lines: po.lines.into_iter().map(|line| PurchaseOrderLineResponse {
-                id: line.id,
-                item_id: line.item_id,
-                qty_ordered: line.qty_ordered,
-                qty_received: line.qty_received,
-                unit_cost: line.unit_cost,
-                line_total: line.line_total,
-            }).collect(),
+            lines: po
+                .lines
+                .into_iter()
+                .map(|line| PurchaseOrderLineResponse {
+                    id: line.id,
+                    item_id: line.item_id,
+                    qty_ordered: line.qty_ordered,
+                    qty_received: line.qty_received,
+                    unit_cost: line.unit_cost,
+                    line_total: line.line_total,
+                })
+                .collect(),
             created_at: po.created_at,
         })
     }
