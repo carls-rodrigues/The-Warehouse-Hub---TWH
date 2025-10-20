@@ -227,10 +227,10 @@ async fn main() {
 
     // Run the server
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
-    println!("🚀 Server running on http://{}", addr);
+    println!("🚀 Server running on http://{addr}");
     axum::serve(listener, app).await.unwrap();
 }
 
