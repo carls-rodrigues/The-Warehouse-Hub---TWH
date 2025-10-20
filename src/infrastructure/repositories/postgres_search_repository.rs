@@ -73,49 +73,45 @@ impl SearchRepository for PostgresSearchRepository {
         let limit = query.limit.unwrap_or(50).min(1000); // Max 1000 results
         let offset = query.offset.unwrap_or(0).max(0);
 
-        let mut sql = r#"
-            SELECT entity_type, entity_id, ts_rank(search_vector, query) as rank, metadata
-            FROM search_indexes, to_tsquery('english', $1) as query
-            WHERE search_vector @@ query
-        "#
-        .to_string();
-
-        let mut bind_count = 1;
-        let mut args = vec![query.query.clone()];
-
-        if let Some(entity_types) = &query.entity_types {
+        let query_builder = if let Some(entity_types) = &query.entity_types {
             if !entity_types.is_empty() {
-                sql.push_str(&format!(" AND entity_type = ANY(${})", bind_count + 1));
-                args.push(entity_types.join(","));
-                bind_count += 1;
+                let sql = r#"
+                    SELECT entity_type, entity_id, ts_rank(search_vector, query) as rank, metadata
+                    FROM search_indexes, to_tsquery('english', $1) as query
+                    WHERE search_vector @@ query AND entity_type = ANY($2)
+                    ORDER BY rank DESC LIMIT $3 OFFSET $4
+                "#;
+                sqlx::query(sql)
+                    .bind(&query.query)
+                    .bind(entity_types.as_slice())
+                    .bind(limit as i64)
+                    .bind(offset as i64)
+            } else {
+                let sql = r#"
+                    SELECT entity_type, entity_id, ts_rank(search_vector, query) as rank, metadata
+                    FROM search_indexes, to_tsquery('english', $1) as query
+                    WHERE search_vector @@ query
+                    ORDER BY rank DESC LIMIT $2 OFFSET $3
+                "#;
+                sqlx::query(sql)
+                    .bind(&query.query)
+                    .bind(limit as i64)
+                    .bind(offset as i64)
             }
-        }
+        } else {
+            let sql = r#"
+                SELECT entity_type, entity_id, ts_rank(search_vector, query) as rank, metadata
+                FROM search_indexes, to_tsquery('english', $1) as query
+                WHERE search_vector @@ query
+                ORDER BY rank DESC LIMIT $2 OFFSET $3
+            "#;
+            sqlx::query(sql)
+                .bind(&query.query)
+                .bind(limit as i64)
+                .bind(offset as i64)
+        };
 
-        sql.push_str(&format!(
-            " ORDER BY rank DESC LIMIT ${} OFFSET ${}",
-            bind_count + 1,
-            bind_count + 2
-        ));
-        args.push(limit.to_string());
-        args.push(offset.to_string());
-
-        let rows = sqlx::query(&sql)
-            .bind(&args[0])
-            .bind(&args.get(1).unwrap_or(&"".to_string()))
-            .bind(
-                &args
-                    .get(2)
-                    .unwrap_or(&limit.to_string())
-                    .parse::<i64>()
-                    .unwrap_or(limit),
-            )
-            .bind(
-                &args
-                    .get(3)
-                    .unwrap_or(&offset.to_string())
-                    .parse::<i64>()
-                    .unwrap_or(offset),
-            )
+        let rows = query_builder
             .fetch_all(&*self.pool)
             .await
             .map_err(|e| DomainError::ValidationError(format!("Search failed: {}", e)))?;
