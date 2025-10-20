@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at\n            FROM stock_levels\n            WHERE location_id = $1\n            ORDER BY item_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "location_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "quantity_on_hand",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_movement_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a9d65e9e2948030be7fdb7e62a13df242914f584c5c1e8c772aada315cf09e17"
+}

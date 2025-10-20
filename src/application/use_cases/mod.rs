@@ -1,12 +1,19 @@
 // Application use cases will be implemented here
+pub mod adjust_stock;
 pub mod create_item;
 pub mod create_location;
 pub mod delete_item;
 pub mod delete_location;
 pub mod get_item;
 pub mod get_location;
+pub mod get_stock_level;
+pub mod get_stock_movements;
+pub mod get_total_quantity_on_hand;
+pub mod idempotency;
+pub mod list_item_stock_levels;
 pub mod list_items;
 pub mod list_locations;
 pub mod login;
+pub mod search_use_case;
 pub mod update_item;
 pub mod update_location;

@@ -1,14 +1,15 @@
 mod application;
 mod domain;
 mod infrastructure;
+mod presentation;
 mod shared;
 
 use crate::application::use_cases::{
     create_item::CreateItemUseCase, create_location::CreateLocationUseCase,
     delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
     get_item::GetItemUseCase, get_location::GetLocationUseCase, list_items::ListItemsUseCase,
-    list_locations::ListLocationsUseCase, login::LoginUseCase, update_item::UpdateItemUseCase,
-    update_location::UpdateLocationUseCase,
+    list_locations::ListLocationsUseCase, login::LoginUseCase, search_use_case::SearchUseCaseImpl,
+    update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
 };
 use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
@@ -16,8 +17,10 @@ use crate::infrastructure::controllers::{
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_location_repository::PostgresLocationRepository,
+    postgres_search_repository::PostgresSearchRepository,
     postgres_user_repository::PostgresUserRepository,
 };
+use crate::presentation::routes::search::create_search_routes;
 use axum::{
     routing::{delete, get, post, put},
     Json, Router,
@@ -40,6 +43,7 @@ pub struct AppState {
     pub update_location_use_case: Arc<UpdateLocationUseCase<PostgresLocationRepository>>,
     pub list_locations_use_case: Arc<ListLocationsUseCase<PostgresLocationRepository>>,
     pub delete_location_use_case: Arc<DeleteLocationUseCase<PostgresLocationRepository>>,
+    pub search_use_case: Arc<SearchUseCaseImpl<PostgresSearchRepository>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -67,6 +71,7 @@ async fn main() {
     let user_repository = Arc::new(PostgresUserRepository::new(Arc::clone(&pool)));
     let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&pool)));
     let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
+    let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -98,6 +103,8 @@ async fn main() {
     let delete_location_use_case =
         Arc::new(DeleteLocationUseCase::new(Arc::clone(&location_repository)));
 
+    let search_use_case = Arc::new(SearchUseCaseImpl::new(Arc::clone(&search_repository)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         login_use_case,
@@ -111,6 +118,7 @@ async fn main() {
         update_location_use_case,
         list_locations_use_case,
         delete_location_use_case,
+        search_use_case,
     };
 
     // Build the application with routes
@@ -127,6 +135,7 @@ async fn main() {
         .route("/locations/{id}", get(get_location_handler))
         .route("/locations/{id}", put(update_location_handler))
         .route("/locations/{id}", delete(delete_location_handler))
+        .merge(create_search_routes())
         .with_state(app_state);
 
     // Run the server

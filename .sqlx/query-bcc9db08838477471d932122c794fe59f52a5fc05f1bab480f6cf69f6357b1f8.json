@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, last_movement_id, updated_at)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (item_id, location_id)\n            DO UPDATE SET\n                quantity_on_hand = stock_levels.quantity_on_hand + EXCLUDED.quantity_on_hand,\n                last_movement_id = EXCLUDED.last_movement_id,\n                updated_at = EXCLUDED.updated_at\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bcc9db08838477471d932122c794fe59f52a5fc05f1bab480f6cf69f6357b1f8"
+}

@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, item_id, location_id, movement_type, quantity,\n                   reference_type, reference_id, reason, created_at, created_by\n            FROM stock_movements\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "location_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "movement_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "quantity",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "reference_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "reference_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "127d83ef41b3ea0824c63e0cfb6b5a52c6a3ec4fad12bc06761502a040fdc85c"
+}

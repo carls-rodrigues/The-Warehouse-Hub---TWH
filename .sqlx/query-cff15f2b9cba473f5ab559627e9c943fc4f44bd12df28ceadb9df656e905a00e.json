@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, updated_at)\n            VALUES ($1, $2, 0, NOW())\n            ON CONFLICT (item_id, location_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cff15f2b9cba473f5ab559627e9c943fc4f44bd12df28ceadb9df656e905a00e"
+}
