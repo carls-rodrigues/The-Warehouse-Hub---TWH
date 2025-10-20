@@ -48,6 +48,7 @@ pub enum ReferenceType {
     SalesOrder,
     Adjustment,
     Transfer,
+    Return,
     Initial,
 }
 
@@ -58,6 +59,7 @@ impl ReferenceType {
             ReferenceType::SalesOrder => "sales_order",
             ReferenceType::Adjustment => "adjustment",
             ReferenceType::Transfer => "transfer",
+            ReferenceType::Return => "return",
             ReferenceType::Initial => "initial",
         }
     }
@@ -68,6 +70,7 @@ impl ReferenceType {
             "sales_order" => Ok(ReferenceType::SalesOrder),
             "adjustment" => Ok(ReferenceType::Adjustment),
             "transfer" => Ok(ReferenceType::Transfer),
+            "return" => Ok(ReferenceType::Return),
             "initial" => Ok(ReferenceType::Initial),
             _ => Err(DomainError::ValidationError(format!(
                 "Invalid reference type: {}",

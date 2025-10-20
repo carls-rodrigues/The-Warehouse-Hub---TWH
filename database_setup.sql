@@ -292,3 +292,82 @@ CREATE INDEX IF NOT EXISTS idx_so_lines_so_id ON sales_order_lines(so_id);
 CREATE INDEX IF NOT EXISTS idx_so_lines_item_id ON sales_order_lines(item_id);
 CREATE INDEX IF NOT EXISTS idx_so_lines_reserved ON sales_order_lines(reserved);
 CREATE INDEX IF NOT EXISTS idx_so_lines_created_at ON sales_order_lines(created_at);
+
+-- Transfers table
+CREATE TABLE IF NOT EXISTS transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transfer_number VARCHAR(100) NOT NULL UNIQUE,
+    from_location_id UUID NOT NULL REFERENCES locations(id),
+    to_location_id UUID NOT NULL REFERENCES locations(id),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('DRAFT', 'OPEN', 'IN_TRANSIT', 'RECEIVED', 'CANCELLED')),
+    total_quantity INTEGER NOT NULL DEFAULT 0 CHECK (total_quantity >= 0),
+    notes TEXT,
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (from_location_id != to_location_id)
+);
+
+-- Create indexes for transfers
+CREATE INDEX IF NOT EXISTS idx_transfers_transfer_number ON transfers(transfer_number);
+CREATE INDEX IF NOT EXISTS idx_transfers_from_location ON transfers(from_location_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_to_location ON transfers(to_location_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_status ON transfers(status);
+CREATE INDEX IF NOT EXISTS idx_transfers_created_by ON transfers(created_by);
+CREATE INDEX IF NOT EXISTS idx_transfers_created_at ON transfers(created_at);
+
+-- Transfer lines table
+CREATE TABLE IF NOT EXISTS transfer_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transfer_id UUID NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES items(id),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    quantity_received INTEGER NOT NULL DEFAULT 0 CHECK (quantity_received >= 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for transfer lines
+CREATE INDEX IF NOT EXISTS idx_transfer_lines_transfer_id ON transfer_lines(transfer_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_lines_item_id ON transfer_lines(item_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_lines_created_at ON transfer_lines(created_at);
+
+-- Create returns table
+CREATE TABLE IF NOT EXISTS returns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    return_number VARCHAR(50) NOT NULL UNIQUE,
+    location_id UUID NOT NULL REFERENCES locations(id),
+    customer_id UUID REFERENCES users(id),
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'OPEN', 'RECEIVED')),
+    total_quantity INTEGER NOT NULL DEFAULT 0 CHECK (total_quantity >= 0),
+    notes TEXT,
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create return lines table
+CREATE TABLE IF NOT EXISTS return_lines (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    return_id UUID NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    item_id UUID NOT NULL REFERENCES items(id),
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    quantity_received INTEGER NOT NULL DEFAULT 0 CHECK (quantity_received >= 0),
+    unit_price DOUBLE PRECISION NOT NULL DEFAULT 0.00 CHECK (unit_price >= 0),
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for returns
+CREATE INDEX IF NOT EXISTS idx_returns_return_number ON returns(return_number);
+CREATE INDEX IF NOT EXISTS idx_returns_location_id ON returns(location_id);
+CREATE INDEX IF NOT EXISTS idx_returns_customer_id ON returns(customer_id);
+CREATE INDEX IF NOT EXISTS idx_returns_status ON returns(status);
+CREATE INDEX IF NOT EXISTS idx_returns_created_by ON returns(created_by);
+CREATE INDEX IF NOT EXISTS idx_returns_created_at ON returns(created_at);
+
+-- Create indexes for return lines
+CREATE INDEX IF NOT EXISTS idx_return_lines_return_id ON return_lines(return_id);
+CREATE INDEX IF NOT EXISTS idx_return_lines_item_id ON return_lines(item_id);
+CREATE INDEX IF NOT EXISTS idx_return_lines_created_at ON return_lines(created_at);

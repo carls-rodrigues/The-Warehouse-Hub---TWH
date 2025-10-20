@@ -7,14 +7,16 @@ mod shared;
 use crate::application::use_cases::{
     adjust_stock::AdjustStockUseCase, create_item::CreateItemUseCase,
     create_location::CreateLocationUseCase, create_purchase_order::CreatePurchaseOrderUseCase,
-    delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
-    get_item::GetItemUseCase, get_location::GetLocationUseCase,
-    get_purchase_order::GetPurchaseOrderUseCase, get_stock_level::GetStockLevelUseCase,
+    create_return::CreateReturnUseCase, delete_item::DeleteItemUseCase,
+    delete_location::DeleteLocationUseCase, get_item::GetItemUseCase,
+    get_location::GetLocationUseCase, get_purchase_order::GetPurchaseOrderUseCase,
+    get_return::GetReturnUseCase, get_stock_level::GetStockLevelUseCase,
     get_stock_movements::GetStockMovementsUseCase,
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
     list_locations::ListLocationsUseCase, login::LoginUseCase,
-    receive_purchase_order::ReceivePurchaseOrderUseCase, search_use_case::SearchUseCaseImpl,
-    update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
+    process_return::ProcessReturnUseCase, receive_purchase_order::ReceivePurchaseOrderUseCase,
+    search_use_case::SearchUseCaseImpl, update_item::UpdateItemUseCase,
+    update_location::UpdateLocationUseCase,
 };
 use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
@@ -23,14 +25,16 @@ use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_location_repository::PostgresLocationRepository,
     postgres_purchase_order_repository::PostgresPurchaseOrderRepository,
+    postgres_return_repository::PostgresReturnRepository,
     postgres_sales_order_repository::PostgresSalesOrderRepository,
     postgres_search_repository::PostgresSearchRepository,
     postgres_stock_repository::PostgresStockRepository,
+    postgres_transfer_repository::PostgresTransferRepository,
     postgres_user_repository::PostgresUserRepository,
 };
 use crate::presentation::routes::{
-    create_purchase_order_routes, create_stock_routes, sales_order::sales_order_routes,
-    search::create_search_routes,
+    create_purchase_order_routes, create_stock_routes, returns::return_routes,
+    sales_order::sales_order_routes, search::create_search_routes, transfer::transfer_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -47,7 +51,9 @@ pub struct AppState {
     pub item_repository: Arc<PostgresItemRepository>,
     pub location_repository: Arc<PostgresLocationRepository>,
     pub purchase_order_repository: Arc<PostgresPurchaseOrderRepository>,
+    pub return_repository: Arc<PostgresReturnRepository>,
     pub sales_order_repository: Arc<PostgresSalesOrderRepository>,
+    pub transfer_repository: Arc<PostgresTransferRepository>,
     pub stock_repository: Arc<PostgresStockRepository>,
     pub search_repository: Arc<PostgresSearchRepository>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
@@ -66,6 +72,9 @@ pub struct AppState {
     pub get_purchase_order_use_case: Arc<GetPurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
     pub receive_purchase_order_use_case:
         Arc<ReceivePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
+    pub create_return_use_case: Arc<CreateReturnUseCase<PostgresReturnRepository>>,
+    pub get_return_use_case: Arc<GetReturnUseCase<PostgresReturnRepository>>,
+    pub process_return_use_case: Arc<ProcessReturnUseCase<PostgresReturnRepository>>,
     pub search_use_case: Arc<SearchUseCaseImpl<PostgresSearchRepository>>,
     pub get_stock_level_use_case: Arc<
         GetStockLevelUseCase<
@@ -118,7 +127,9 @@ async fn main() {
     let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
     let purchase_order_repository =
         Arc::new(PostgresPurchaseOrderRepository::new(Arc::clone(&pool)));
+    let return_repository = Arc::new(PostgresReturnRepository::new(Arc::clone(&pool)));
     let sales_order_repository = Arc::new(PostgresSalesOrderRepository::new(Arc::clone(&pool)));
+    let transfer_repository = Arc::new(PostgresTransferRepository::new(Arc::clone(&pool)));
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
     let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
 
@@ -162,6 +173,11 @@ async fn main() {
         &purchase_order_repository,
     )));
 
+    let create_return_use_case = Arc::new(CreateReturnUseCase::new(Arc::clone(&return_repository)));
+    let get_return_use_case = Arc::new(GetReturnUseCase::new(Arc::clone(&return_repository)));
+    let process_return_use_case =
+        Arc::new(ProcessReturnUseCase::new(Arc::clone(&return_repository)));
+
     let search_use_case = Arc::new(SearchUseCaseImpl::new(Arc::clone(&search_repository)));
 
     let get_stock_level_use_case = Arc::new(GetStockLevelUseCase::new(
@@ -187,7 +203,9 @@ async fn main() {
         item_repository: Arc::clone(&item_repository),
         location_repository: Arc::clone(&location_repository),
         purchase_order_repository: Arc::clone(&purchase_order_repository),
+        return_repository: Arc::clone(&return_repository),
         sales_order_repository: Arc::clone(&sales_order_repository),
+        transfer_repository: Arc::clone(&transfer_repository),
         stock_repository: Arc::clone(&stock_repository),
         search_repository: Arc::clone(&search_repository),
         login_use_case,
@@ -204,6 +222,9 @@ async fn main() {
         create_purchase_order_use_case,
         get_purchase_order_use_case,
         receive_purchase_order_use_case,
+        create_return_use_case,
+        get_return_use_case,
+        process_return_use_case,
         search_use_case,
         get_stock_level_use_case,
         list_item_stock_levels_use_case,
@@ -229,6 +250,8 @@ async fn main() {
         .merge(create_stock_routes())
         .merge(create_purchase_order_routes())
         .merge(sales_order_routes())
+        .merge(transfer_routes())
+        .merge(return_routes())
         .with_state(app_state);
 
     // Run the server

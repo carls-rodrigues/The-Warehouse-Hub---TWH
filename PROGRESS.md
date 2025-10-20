@@ -1,7 +1,7 @@
 # The Warehouse Hub (TWH) - Implementation Progress
 
-**Last Updated:** October 19, 2025  
-**Current Status:** SPRINT 1 COMPLETE ✅ | SPRINT 2 READY 🚀
+**Last Updated:** October 20, 2025  
+**Current Status:** SPRINT 1 COMPLETE ✅ | SPRINT 2 COMPLETE ✅ | SPRINT 3 IN PROGRESS 🚧
 
 ---
 
@@ -164,6 +164,149 @@ The Warehouse Hub is a developer-first, ledger-first inventory backend providing
 - Search and projection infrastructure
 - Stock management API endpoints
 - Enhanced item search capabilities
+
+---
+
+### 🚀 SPRINT 3: BUSINESS FLOWS (96h Total)
+**Status:** 🎯 **IN PROGRESS** (TASK-020 ✅, TASK-021 ✅, TASK-022 ✅)
+
+#### ✅ TASK-020: Purchase Orders CRUD and Receive (32h)
+**Status:** ✅ **PRODUCTION READY**
+
+- Complete Purchase Orders domain model with line items
+- PO status lifecycle: DRAFT → OPEN → RECEIVED
+- Stock receipt integration with automatic INBOUND movements
+- Supplier and item validation
+- Full CRUD operations with proper authorization
+
+**API Endpoints Added:**
+- `POST /purchase_orders` - Create purchase order
+- `GET /purchase_orders/{id}` - Get purchase order details
+- `GET /purchase_orders` - List purchase orders with pagination
+- `PUT /purchase_orders/{id}` - Update purchase order (DRAFT only)
+- `DELETE /purchase_orders/{id}` - Cancel purchase order (DRAFT only)
+- `POST /purchase_orders/{id}/receive` - Receive items against PO
+
+**Database Schema:**
+- `purchase_orders` and `purchase_order_lines` tables
+- Proper foreign key relationships and constraints
+- Status validation and business rule enforcement
+
+**Testing Results:**
+- ✅ All endpoints functional and tested
+- ✅ Status lifecycle working correctly
+- ✅ Stock movements created on receipt
+- ✅ Business rule validation enforced
+
+#### ✅ TASK-021: Sales Orders CRUD and Ship (32h)
+**Status:** ✅ **PRODUCTION READY**
+
+- Complete Sales Orders domain model with line items
+- SO status lifecycle: DRAFT → OPEN → SHIPPED
+- Stock allocation and OUTBOUND movements on shipping
+- Customer order processing with reservation support
+- Full CRUD operations with proper authorization
+
+**API Endpoints Added:**
+- `POST /sales_orders` - Create sales order
+- `GET /sales_orders/{id}` - Get sales order details
+- `GET /sales_orders` - List sales orders with pagination
+- `PUT /sales_orders/{id}` - Update sales order (DRAFT only)
+- `DELETE /sales_orders/{id}` - Cancel sales order (DRAFT only)
+- `POST /sales_orders/{id}/ship` - Ship items against SO
+
+**Database Schema:**
+- `sales_orders` and `sales_order_lines` tables
+- Proper foreign key relationships and constraints
+- Status validation and business rule enforcement
+
+**Testing Results:**
+- ✅ All endpoints functional and tested
+- ✅ Status lifecycle working correctly
+- ✅ Stock movements created on shipping
+- ✅ Business rule validation enforced
+
+#### ✅ TASK-022: Transfers CRUD and Receive (32h)
+**Status:** ✅ **PRODUCTION READY**
+
+- Complete Transfers domain model with line items
+- Transfer status lifecycle: DRAFT → OPEN → IN_TRANSIT → RECEIVED
+- Location-to-location inventory transfers
+- OUTBOUND movements on shipping, INBOUND movements on receiving
+- Full CRUD operations with proper authorization
+
+**API Endpoints Added:**
+- `POST /transfers` - Create transfer
+- `GET /transfers/{id}` - Get transfer details
+- `POST /transfers/{id}/ship` - Ship transfer (create OUTBOUND movements)
+- `POST /transfers/{id}/receive` - Receive transfer (create INBOUND movements)
+
+**Database Schema:**
+- `transfers` and `transfer_lines` tables
+- Proper foreign key relationships and constraints
+- Status validation and business rule enforcement
+
+**Testing Results:**
+- ✅ All endpoints functional and tested
+- ✅ Status lifecycle working correctly (DRAFT → OPEN → IN_TRANSIT → RECEIVED)
+- ✅ OUTBOUND movements created on shipping
+- ✅ INBOUND movements created on receiving
+- ✅ Business rule validation enforced
+- ✅ Transfer numbers generated automatically
+
+---
+
+### 🎯 SPRINT 3: BUSINESS FLOWS (96h Total)
+**Status:** 🚧 **IN PROGRESS** - Returns CRUD implementation completed, Adjustments pending
+
+#### ✅ TASK-023: Returns CRUD and Process (32h)
+**Status:** ✅ **PRODUCTION READY** - *COMPLETED October 20, 2025*
+
+**Complete Implementation:**
+
+- **Domain Model:** Return entity with status lifecycle (DRAFT → OPEN → RECEIVED)
+- **Business Logic:** Line item management, quantity validation, reason codes, condition tracking
+- **Repository Layer:** PostgreSQL implementation with complex queries and transactions
+- **Stock Integration:** Automatic INBOUND stock movements on return processing
+- **API Endpoints:** Full CRUD with process functionality
+
+**API Endpoints Added:**
+- `POST /returns` - Create return with line items (authenticated)
+- `GET /returns/{id}` - Retrieve return with full details
+- `POST /returns/{id}/process` - Process return (create INBOUND movements)
+
+**Database Schema:**
+- `returns` table with status tracking and customer references
+- `return_lines` table with quantity, unit_price, reason, and condition tracking
+- Proper indexing for performance (return_number, customer_id, status, timestamps)
+- Foreign key constraints for data integrity
+
+**Stock Ledger Integration:**
+- **Movement Type:** INBOUND for all return processing
+- **Reference Type:** return with return ID linkage
+- **Transactional:** Atomic operations ensuring data consistency
+- **Audit Trail:** Complete history of all inventory changes
+
+**Testing Results:**
+- ✅ Return creation with line items and validation
+- ✅ Status transitions (DRAFT → OPEN → RECEIVED)
+- ✅ Stock movements created correctly on processing
+- ✅ API responses match OpenAPI specification
+- ✅ Error handling for invalid operations
+- ✅ Database constraints and transactions working
+
+**Code Quality:**
+- **Clean Architecture:** Domain/Application/Infrastructure separation maintained
+- **Error Handling:** Comprehensive domain error types
+- **Type Safety:** Full Rust compile-time guarantees
+- **Performance:** Efficient queries with proper indexing
+
+#### 🎯 TASK-024: Adjustments CRUD (32h, P0)
+**Priority:** **HIGH**
+
+- Manual stock adjustments with reason codes
+- Adjustment validation and audit trail
+- Stock level corrections and inventory reconciliation
 
 ---
 
