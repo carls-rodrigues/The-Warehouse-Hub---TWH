@@ -50,6 +50,45 @@ CREATE INDEX IF NOT EXISTS idx_items_category ON items(category);
 CREATE INDEX IF NOT EXISTS idx_items_active ON items(active);
 CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at);
 
+-- Locations table for inventory locations
+CREATE TABLE IF NOT EXISTS locations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(100) UNIQUE,
+    address JSONB,
+    type VARCHAR(50) CHECK (type IN ('warehouse', 'store', 'drop-ship')),
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for locations
+CREATE INDEX IF NOT EXISTS idx_locations_code ON locations(code);
+CREATE INDEX IF NOT EXISTS idx_locations_name ON locations(name);
+CREATE INDEX IF NOT EXISTS idx_locations_type ON locations(type);
+CREATE INDEX IF NOT EXISTS idx_locations_active ON locations(active);
+CREATE INDEX IF NOT EXISTS idx_locations_created_at ON locations(created_at);
+
+-- Insert some test locations for development
+INSERT INTO locations (id, name, code, address, type, active)
+VALUES
+    (
+        '550e8400-e29b-41d4-a716-446655440010',
+        'Main Warehouse',
+        'MAIN-WH',
+        '{"line1": "123 Industrial Blvd", "city": "Springfield", "region": "IL", "postal_code": "62701", "country": "US"}',
+        'warehouse',
+        true
+    ),
+    (
+        '550e8400-e29b-41d4-a716-446655440011',
+        'Downtown Store',
+        'DOWNTOWN',
+        '{"line1": "456 Main St", "city": "Springfield", "region": "IL", "postal_code": "62701", "country": "US"}',
+        'store',
+        true
+    ) ON CONFLICT (code) DO NOTHING;
+
 -- Insert some test items for development
 INSERT INTO items (id, sku, name, description, category, unit, barcode, cost_price, sale_price, reorder_point, reorder_qty, weight, dimensions, metadata, active)
 VALUES

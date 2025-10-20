@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, sku, name, description, category, unit, barcode, cost_price, sale_price,\n                   reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at\n            FROM items\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sku",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "category",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "unit",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "barcode",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "cost_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 8,
+        "name": "sale_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 9,
+        "name": "reorder_point",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "reorder_qty",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "weight",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 12,
+        "name": "dimensions",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 13,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "da36d4c75d54e4b436c5d22182c3687691f73ad359c6386a408f9ad06f907461"
+}

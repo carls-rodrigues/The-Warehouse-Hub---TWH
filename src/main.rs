@@ -4,12 +4,18 @@ mod infrastructure;
 mod shared;
 
 use crate::application::use_cases::{
-    create_item::CreateItemUseCase, delete_item::DeleteItemUseCase, get_item::GetItemUseCase,
-    list_items::ListItemsUseCase, login::LoginUseCase, update_item::UpdateItemUseCase,
+    create_item::CreateItemUseCase, create_location::CreateLocationUseCase,
+    delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
+    get_item::GetItemUseCase, get_location::GetLocationUseCase, list_items::ListItemsUseCase,
+    list_locations::ListLocationsUseCase, login::LoginUseCase, update_item::UpdateItemUseCase,
+    update_location::UpdateLocationUseCase,
 };
-use crate::infrastructure::controllers::{auth_controller::login_handler, items_controller::*};
+use crate::infrastructure::controllers::{
+    auth_controller::login_handler, items_controller::*, locations_controller::*,
+};
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
+    postgres_location_repository::PostgresLocationRepository,
     postgres_user_repository::PostgresUserRepository,
 };
 use axum::{
@@ -29,6 +35,11 @@ pub struct AppState {
     pub update_item_use_case: Arc<UpdateItemUseCase<PostgresItemRepository>>,
     pub list_items_use_case: Arc<ListItemsUseCase<PostgresItemRepository>>,
     pub delete_item_use_case: Arc<DeleteItemUseCase<PostgresItemRepository>>,
+    pub create_location_use_case: Arc<CreateLocationUseCase<PostgresLocationRepository>>,
+    pub get_location_use_case: Arc<GetLocationUseCase<PostgresLocationRepository>>,
+    pub update_location_use_case: Arc<UpdateLocationUseCase<PostgresLocationRepository>>,
+    pub list_locations_use_case: Arc<ListLocationsUseCase<PostgresLocationRepository>>,
+    pub delete_location_use_case: Arc<DeleteLocationUseCase<PostgresLocationRepository>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -55,6 +66,7 @@ async fn main() {
     // Initialize dependencies
     let user_repository = Arc::new(PostgresUserRepository::new(Arc::clone(&pool)));
     let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&pool)));
+    let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -76,6 +88,16 @@ async fn main() {
     let list_items_use_case = Arc::new(ListItemsUseCase::new(Arc::clone(&item_repository)));
     let delete_item_use_case = Arc::new(DeleteItemUseCase::new(Arc::clone(&item_repository)));
 
+    let create_location_use_case =
+        Arc::new(CreateLocationUseCase::new(Arc::clone(&location_repository)));
+    let get_location_use_case = Arc::new(GetLocationUseCase::new(Arc::clone(&location_repository)));
+    let update_location_use_case =
+        Arc::new(UpdateLocationUseCase::new(Arc::clone(&location_repository)));
+    let list_locations_use_case =
+        Arc::new(ListLocationsUseCase::new(Arc::clone(&location_repository)));
+    let delete_location_use_case =
+        Arc::new(DeleteLocationUseCase::new(Arc::clone(&location_repository)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         login_use_case,
@@ -84,6 +106,11 @@ async fn main() {
         update_item_use_case,
         list_items_use_case,
         delete_item_use_case,
+        create_location_use_case,
+        get_location_use_case,
+        update_location_use_case,
+        list_locations_use_case,
+        delete_location_use_case,
     };
 
     // Build the application with routes
@@ -95,6 +122,11 @@ async fn main() {
         .route("/items/{id}", get(get_item_handler))
         .route("/items/{id}", put(update_item_handler))
         .route("/items/{id}", delete(delete_item_handler))
+        .route("/locations", post(create_location_handler))
+        .route("/locations", get(list_locations_handler))
+        .route("/locations/{id}", get(get_location_handler))
+        .route("/locations/{id}", put(update_location_handler))
+        .route("/locations/{id}", delete(delete_location_handler))
         .with_state(app_state);
 
     // Run the server
