@@ -8,8 +8,8 @@ use crate::shared::error::DomainError;
 
 #[derive(Clone)]
 pub struct CompositeIdempotencyRepository<R: IdempotencyRepository, P: IdempotencyRepository> {
-    primary: Arc<R>,   // Redis repository (primary)
-    fallback: Arc<P>,  // PostgreSQL repository (fallback)
+    primary: Arc<R>,  // Redis repository (primary)
+    fallback: Arc<P>, // PostgreSQL repository (fallback)
 }
 
 impl<R: IdempotencyRepository, P: IdempotencyRepository> CompositeIdempotencyRepository<R, P> {
@@ -19,12 +19,14 @@ impl<R: IdempotencyRepository, P: IdempotencyRepository> CompositeIdempotencyRep
 }
 
 #[async_trait]
-impl<R: IdempotencyRepository, P: IdempotencyRepository> IdempotencyRepository for CompositeIdempotencyRepository<R, P> {
+impl<R: IdempotencyRepository, P: IdempotencyRepository> IdempotencyRepository
+    for CompositeIdempotencyRepository<R, P>
+{
     async fn store_key(&self, key: &IdempotencyKey) -> Result<(), DomainError> {
         // Try primary (Redis) first
         match self.primary.store_key(key).await {
             Ok(()) => Ok(()),
-            Err(DomainError::ValidationError(_)) => {
+            Err(DomainError::InfrastructureError(_)) => {
                 // Redis failed, try fallback (PostgreSQL)
                 self.fallback.store_key(key).await
             }
@@ -55,11 +57,17 @@ impl<R: IdempotencyRepository, P: IdempotencyRepository> IdempotencyRepository f
         body: Option<String>,
     ) -> Result<(), DomainError> {
         // Try primary (Redis) first
-        match self.primary.complete_key(idempotency_key, status.clone(), body.clone()).await {
+        match self
+            .primary
+            .complete_key(idempotency_key, status.clone(), body.clone())
+            .await
+        {
             Ok(()) => Ok(()),
             Err(DomainError::ValidationError(_)) => {
                 // Redis failed, try fallback (PostgreSQL)
-                self.fallback.complete_key(idempotency_key, status, body).await
+                self.fallback
+                    .complete_key(idempotency_key, status, body)
+                    .await
             }
             Err(e) => Err(e), // Other errors are returned as-is
         }

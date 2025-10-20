@@ -6,6 +6,7 @@ pub enum DomainError {
     BusinessLogicError(String),
     NotFound(String),
     Conflict(String),
+    InfrastructureError(String),
 }
 
 impl std::fmt::Display for DomainError {
@@ -15,6 +16,7 @@ impl std::fmt::Display for DomainError {
             DomainError::BusinessLogicError(msg) => write!(f, "Business logic error: {}", msg),
             DomainError::NotFound(msg) => write!(f, "Not found: {}", msg),
             DomainError::Conflict(msg) => write!(f, "Conflict: {}", msg),
+            DomainError::InfrastructureError(msg) => write!(f, "Infrastructure error: {}", msg),
         }
     }
 }
