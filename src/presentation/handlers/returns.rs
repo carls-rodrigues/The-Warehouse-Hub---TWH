@@ -1,11 +1,8 @@
-use crate::application::use_cases::create_return::{
-    CreateReturnResponse, CreateReturnUseCase,
-};
+use crate::application::use_cases::create_return::{CreateReturnResponse, CreateReturnUseCase};
 use crate::application::use_cases::get_return::{GetReturnResponse, GetReturnUseCase};
-use crate::application::use_cases::process_return::{
-    ProcessReturnResponse, ProcessReturnUseCase,
-};
+use crate::application::use_cases::process_return::{ProcessReturnResponse, ProcessReturnUseCase};
 use crate::domain::entities::returns::ProcessReturnRequest;
+use crate::domain::services::return_repository::ReturnRepository;
 use crate::infrastructure::repositories::postgres_return_repository::PostgresReturnRepository;
 use crate::shared::error::DomainError;
 use crate::AppState;
@@ -91,5 +88,29 @@ pub async fn process_return(
                 Json(json!({ "error": "Internal server error" })),
             ))
         }
+    }
+}
+
+pub async fn open_return(
+    State(state): State<AppState>,
+    Path(return_id): Path<Uuid>,
+) -> Result<Json<GetReturnResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let repo = Arc::new(PostgresReturnRepository::new(Arc::clone(&state.pool)));
+
+    match repo.open_return(return_id).await {
+        Ok((return_entity, lines)) => Ok(Json(GetReturnResponse {
+            return_entity,
+            lines,
+        })),
+        Err(DomainError::NotFound(msg)) => {
+            Err((StatusCode::NOT_FOUND, Json(json!({ "error": msg }))))
+        }
+        Err(DomainError::ValidationError(msg)) => {
+            Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))
+        }
+        Err(_) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "Internal server error" })),
+        )),
     }
 }

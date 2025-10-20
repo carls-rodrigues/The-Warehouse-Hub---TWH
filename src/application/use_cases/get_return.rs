@@ -28,7 +28,10 @@ impl<R: ReturnRepository> GetReturnUseCase<R> {
             .await?
             .ok_or_else(|| DomainError::NotFound(format!("Return {} not found", return_id)))?;
 
-        Ok(GetReturnResponse { return_entity, lines })
+        Ok(GetReturnResponse {
+            return_entity,
+            lines,
+        })
     }
 
     pub async fn execute_by_number(
@@ -39,10 +42,11 @@ impl<R: ReturnRepository> GetReturnUseCase<R> {
             .return_repository
             .find_by_return_number(return_number)
             .await?
-            .ok_or_else(|| {
-                DomainError::NotFound(format!("Return {} not found", return_number))
-            })?;
+            .ok_or_else(|| DomainError::NotFound(format!("Return {} not found", return_number)))?;
 
-        Ok(GetReturnResponse { return_entity, lines })
+        Ok(GetReturnResponse {
+            return_entity,
+            lines,
+        })
     }
 }

@@ -1,7 +1,5 @@
 use crate::domain::entities::inventory::StockMovement;
-use crate::domain::entities::returns::{
-    ProcessReturnRequest, Return, ReturnLine,
-};
+use crate::domain::entities::returns::{ProcessReturnRequest, Return, ReturnLine};
 use crate::domain::services::return_repository::ReturnRepository;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;

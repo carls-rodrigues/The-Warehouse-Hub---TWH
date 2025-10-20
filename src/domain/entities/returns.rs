@@ -39,10 +39,9 @@ impl ReturnStatus {
             ReturnStatus::Draft => {
                 matches!(new_status, ReturnStatus::Open | ReturnStatus::Cancelled)
             }
-            ReturnStatus::Open => matches!(
-                new_status,
-                ReturnStatus::Received | ReturnStatus::Cancelled
-            ),
+            ReturnStatus::Open => {
+                matches!(new_status, ReturnStatus::Received | ReturnStatus::Cancelled)
+            }
             ReturnStatus::Received => false,
             ReturnStatus::Cancelled => false,
         }

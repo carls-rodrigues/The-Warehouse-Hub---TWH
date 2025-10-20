@@ -1,6 +1,4 @@
-use crate::domain::entities::returns::{
-    CreateReturnRequest, Return, ReturnLine,
-};
+use crate::domain::entities::returns::{CreateReturnRequest, Return, ReturnLine};
 use crate::domain::services::return_repository::ReturnRepository;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;

@@ -1,7 +1,5 @@
 use crate::domain::entities::inventory::StockMovement;
-use crate::domain::entities::returns::{
-    ProcessReturnRequest, Return, ReturnLine, ReturnStatus,
-};
+use crate::domain::entities::returns::{ProcessReturnRequest, Return, ReturnLine, ReturnStatus};
 use crate::domain::services::return_repository::ReturnRepository;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
@@ -147,10 +145,7 @@ impl ReturnRepository for PostgresReturnRepository {
         Ok(())
     }
 
-    async fn find_by_id(
-        &self,
-        id: Uuid,
-    ) -> Result<Option<(Return, Vec<ReturnLine>)>, DomainError> {
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<(Return, Vec<ReturnLine>)>, DomainError> {
         let mut tx = self
             .pool
             .begin()
