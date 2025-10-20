@@ -9,18 +9,20 @@
 
 ## Current Development Status
 
-**Sprint 2: Core Ledger Infrastructure** - *75% Complete*  
-**Status:** Active development with 3 of 4 core tasks completed  
+**Sprint 2: Core Ledger Infrastructure** - *100% Complete*  
+**Status:** All core tasks completed - ready for PR and performance validation  
 **Progress Report:** See [SPRINT_2_PROGRESS.md](SPRINT_2_PROGRESS.md) for detailed implementation status
 
 **Completed Infrastructure:**
 - ✅ Stock Management Ledger (TASK-004) - Immutable ledger with transactional snapshots
 - ✅ Idempotency Middleware (TASK-005) - Dual-storage Redis/PostgreSQL resilience
 - ✅ Search Indexing Pipeline (TASK-008) - Full-text search with automatic indexing
+- ✅ Stock Search API Endpoints (TASK-030) - Comprehensive search across all entities
+- ✅ Items Search Endpoint (TASK-031) - Entity-specific search with relevance ranking
 
-**Remaining Tasks:**
-- 🔄 Stock Search API Endpoints (TASK-030)
-- 🔄 Items Search Endpoint (TASK-031)
+**Next Steps:**
+- 🔄 Performance validation and benchmarking
+- 🔄 PR preparation with comprehensive testing notes
 
 ---
 
@@ -85,7 +87,7 @@
 ## API contract and developer experience
 
 ## OpenAPI & SDKs
-- Single source OpenAPI 3.0 YAML (v1.1.0) published and versioned.  
+- Single source OpenAPI 3.0 YAML (v1.2.0) published and versioned.  
 - Official SDKs: Node and Python initial releases; include idempotency helper, ETag helper, and webhook verification utility.  
 - Postman collection and “first 10 minutes” quickstart sample app.
 
@@ -95,6 +97,7 @@
 - Error response: structured Error{code, message, details, request_id}.  
 - Pagination: support page/per_page and cursor with CursorMeta.  
 - include_movements query param on /stock to include recent movements (costly).
+- Full-text search: comprehensive search endpoints (/search/*) with relevance ranking, entity-specific searches, and autocomplete suggestions.
 
 ## Developer portal
 - Sandbox environment with ephemeral tenants and sample data.  
@@ -174,7 +177,7 @@
 ## Product roadmap, deliverables and diagram artifacts
 
 ## Immediate (0–4 weeks)
-- Finalize and publish OpenAPI v1.1.0.  
+- Finalize and publish OpenAPI v1.2.0.  
 - Implement idempotency store and ETag handling.  
 - Deploy minimal self-hosted stack and sandbox.  
 - Publish quickstart and Postman collection.

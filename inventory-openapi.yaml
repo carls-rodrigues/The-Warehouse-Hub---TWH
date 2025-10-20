@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: The Warehouse Hub (TWH) API
-  version: "1.1.0"
+  version: "1.2.0"
   description: >
     The Warehouse Hub (TWH) Inventory API. Production-ready contract with
     optimistic concurrency (ETag / If-Match), idempotent creates (Idempotency-Key),
@@ -352,6 +352,55 @@ components:
         ref_id: "44444444-4444-4444-4444-444444444444"
         user_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         created_at: "2025-12-02T10:00:00Z"
+
+    SearchResultItem:
+      type: object
+      required: [entity_type, entity_id, rank]
+      properties:
+        entity_type:
+          type: string
+          enum: [item, location, stock_level]
+          description: Type of entity that was found
+        entity_id:
+          type: string
+          format: uuid
+          description: UUID of the found entity
+        metadata:
+          type: object
+          description: Additional entity-specific data
+        rank:
+          type: number
+          format: float
+          description: Search relevance score (higher is better)
+    SearchResponse:
+      type: object
+      required: [results, total, query, took_ms]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResultItem'
+        total:
+          type: integer
+          description: Total number of matching results
+        query:
+          type: string
+          description: The search query that was executed
+        took_ms:
+          type: integer
+          description: Time taken to execute the search in milliseconds
+    SuggestionsResponse:
+      type: object
+      required: [suggestions, prefix]
+      properties:
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: Array of suggested search terms
+        prefix:
+          type: string
+          description: The prefix that was used to generate suggestions
 
 paths:
   /auth/login:
@@ -773,6 +822,189 @@ paths:
                 $ref: '#/components/schemas/Adjustment'
         '400':
           description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /search:
+    get:
+      summary: Search across all entities (items, locations, stock levels) with full-text search
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          description: Search query string
+          required: true
+          schema: { type: string }
+        - name: entity_types
+          in: query
+          description: Comma-separated list of entity types to search (item,location,stock_level). If not specified, searches all types.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema: { type: integer, default: 0 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: search results with relevance ranking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /search/items:
+    get:
+      summary: Search items with full-text search and relevance ranking
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          description: Search query string (searches name, SKU, barcode, description, category)
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema: { type: integer, default: 0 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: item search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /search/locations:
+    get:
+      summary: Search locations with full-text search and relevance ranking
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          description: Search query string (searches name, code, address fields)
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema: { type: integer, default: 0 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: location search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /search/stock-levels:
+    get:
+      summary: Search stock levels with full-text search and relevance ranking
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          description: Search query string (searches associated item and location data)
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          description: Number of results to skip for pagination
+          schema: { type: integer, default: 0 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: stock level search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /search/suggestions:
+    get:
+      summary: Get search suggestions based on a prefix
+      tags: [Search]
+      parameters:
+        - name: prefix
+          in: query
+          description: Prefix string to generate suggestions for
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Maximum number of suggestions to return
+          schema: { type: integer, default: 10, maximum: 50 }
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: search suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionsResponse'
+        '400':
+          description: invalid prefix parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/search/rebuild:
+    post:
+      summary: Rebuild search indexes from scratch (admin only)
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+      responses:
+        '200':
+          description: search indexes rebuilt successfully
+        '500':
+          description: internal server error during rebuild
           content:
             application/json:
               schema:
@@ -1513,5 +1745,5 @@ tags:
 
 externalDocs:
   description: Implementation notes, migration guide, SDKs, and examples
-  url: https://api.thewarehousehub.com/docs/migration-v1.1.0
+  url: https://api.thewarehousehub.com/docs/migration-v1.2.0
 
