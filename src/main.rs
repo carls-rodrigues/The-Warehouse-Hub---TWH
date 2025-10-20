@@ -3,11 +3,17 @@ mod domain;
 mod infrastructure;
 mod shared;
 
-use crate::application::use_cases::login::LoginUseCase;
-use crate::infrastructure::controllers::auth_controller::login_handler;
-use crate::infrastructure::repositories::postgres_user_repository::PostgresUserRepository;
+use crate::application::use_cases::{
+    create_item::CreateItemUseCase, delete_item::DeleteItemUseCase, get_item::GetItemUseCase,
+    list_items::ListItemsUseCase, login::LoginUseCase, update_item::UpdateItemUseCase,
+};
+use crate::infrastructure::controllers::{auth_controller::login_handler, items_controller::*};
+use crate::infrastructure::repositories::{
+    postgres_item_repository::PostgresItemRepository,
+    postgres_user_repository::PostgresUserRepository,
+};
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::Serialize;
@@ -18,6 +24,11 @@ use std::{env, sync::Arc};
 pub struct AppState {
     pub pool: Arc<PgPool>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
+    pub create_item_use_case: Arc<CreateItemUseCase<PostgresItemRepository>>,
+    pub get_item_use_case: Arc<GetItemUseCase<PostgresItemRepository>>,
+    pub update_item_use_case: Arc<UpdateItemUseCase<PostgresItemRepository>>,
+    pub list_items_use_case: Arc<ListItemsUseCase<PostgresItemRepository>>,
+    pub delete_item_use_case: Arc<DeleteItemUseCase<PostgresItemRepository>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -43,6 +54,7 @@ async fn main() {
 
     // Initialize dependencies
     let user_repository = Arc::new(PostgresUserRepository::new(Arc::clone(&pool)));
+    let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&pool)));
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -58,15 +70,31 @@ async fn main() {
         jwt_expiry_hours,
     ));
 
+    let create_item_use_case = Arc::new(CreateItemUseCase::new(Arc::clone(&item_repository)));
+    let get_item_use_case = Arc::new(GetItemUseCase::new(Arc::clone(&item_repository)));
+    let update_item_use_case = Arc::new(UpdateItemUseCase::new(Arc::clone(&item_repository)));
+    let list_items_use_case = Arc::new(ListItemsUseCase::new(Arc::clone(&item_repository)));
+    let delete_item_use_case = Arc::new(DeleteItemUseCase::new(Arc::clone(&item_repository)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         login_use_case,
+        create_item_use_case,
+        get_item_use_case,
+        update_item_use_case,
+        list_items_use_case,
+        delete_item_use_case,
     };
 
     // Build the application with routes
     let app = Router::new()
         .route("/healthz", get(health_handler))
         .route("/auth/login", post(login_handler))
+        .route("/items", post(create_item_handler))
+        .route("/items", get(list_items_handler))
+        .route("/items/{id}", get(get_item_handler))
+        .route("/items/{id}", put(update_item_handler))
+        .route("/items/{id}", delete(delete_item_handler))
         .with_state(app_state);
 
     // Run the server

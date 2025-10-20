@@ -1,22 +1,11 @@
-warning: unused import: `LoginUseCase`
- --> src/infrastructure/controllers/auth_controller.rs:1:58
+nohup: ignoring input
+warning: unused import: `UpdateItemRequest`
+ --> src/domain/services/item_repository.rs:1:43
   |
-1 | use crate::application::use_cases::login::{LoginRequest, LoginUseCase};
-  |                                                          ^^^^^^^^^^^^
+1 | use crate::domain::entities::item::{Item, UpdateItemRequest};
+  |                                           ^^^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` on by default
-
-warning: unused import: `crate::infrastructure::repositories::postgres_user_repository::PostgresUserRepository`
- --> src/infrastructure/controllers/auth_controller.rs:2:5
-  |
-2 | use crate::infrastructure::repositories::postgres_user_repository::PostgresUserRepository;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `std::sync::Arc`
- --> src/infrastructure/controllers/auth_controller.rs:7:5
-  |
-7 | use std::sync::Arc;
-  |     ^^^^^^^^^^^^^^
 
 warning: struct `Inventory` is never constructed
  --> src/domain/entities/inventory.rs:2:12
@@ -26,19 +15,13 @@ warning: struct `Inventory` is never constructed
   |
   = note: `#[warn(dead_code)]` on by default
 
-warning: struct `Item` is never constructed
- --> src/domain/entities/item.rs:2:12
-  |
-2 | pub struct Item {
-  |            ^^^^
-
 warning: struct `Location` is never constructed
  --> src/domain/entities/location.rs:2:12
   |
 2 | pub struct Location {
   |            ^^^^^^^^
 
-warning: `The-Warehouse-Hub---TWH` (bin "The-Warehouse-Hub---TWH") generated 6 warnings (run `cargo fix --bin "The-Warehouse-Hub---TWH"` to apply 3 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+warning: `The-Warehouse-Hub---TWH` (bin "The-Warehouse-Hub---TWH") generated 3 warnings (run `cargo fix --bin "The-Warehouse-Hub---TWH"` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
      Running `target/debug/The-Warehouse-Hub---TWH`
 🚀 Server running on http://0.0.0.0:8080
