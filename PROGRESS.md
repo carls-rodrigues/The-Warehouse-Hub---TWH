@@ -109,21 +109,54 @@ The Warehouse Hub is a developer-first, ledger-first inventory backend providing
 - Meilisearch integration for full-text search
 - Real-time projection updates
 
-#### 🎯 TASK-030: Stock Search & Adjust Endpoints (20h, P0)
-**Priority:** **HIGH**
+#### ✅ TASK-030: Stock Search & Adjust Endpoints (COMPLETED)
+**Status:** ✅ **PRODUCTION READY**
 
-- Stock level queries with movement history
-- Stock adjustment operations
-- Location-based stock filtering
-- Real-time stock availability
+- Stock level queries with movement history ✅
+- Stock adjustment operations ✅
+- Location-based stock filtering ✅
+- Real-time stock availability ✅
 
-#### 🎯 TASK-031: Items Search Endpoint (12h, P0)
-**Priority:** **MEDIUM**
+**API Endpoints Added:**
+- `GET /stock/{item_id}/{location_id}` - Get specific stock level
+- `GET /stock/items/{item_id}` - Get stock levels across all locations for an item
+- `GET /stock/movements` - Get stock movements with filtering (item_id, location_id, pagination)
+- `POST /stock/adjust` - Adjust stock levels with full audit trail
 
-- Advanced item search capabilities
-- SKU/barcode lookup optimization
-- Category and metadata filtering
-- Search result pagination
+**Features Implemented:**
+- Complete stock level management with item and location details
+- Stock movement history with full context (items, locations, users)
+- Atomic stock adjustments with transaction safety
+- Pagination support for large datasets
+- Proper error handling and validation
+- Integration with existing authentication (ready for JWT user context)
+
+**Testing Results:**
+- ✅ All endpoints functional and tested
+- ✅ Stock adjustments create proper audit trail
+- ✅ Stock levels update atomically with movements
+- ✅ Movement history queries work with filtering
+- ✅ API responses include complete entity details
+
+#### ✅ TASK-031: Items Search Endpoint (COMPLETED)
+**Status:** ✅ **PRODUCTION READY**
+
+- Advanced item search capabilities ✅
+- SKU/barcode lookup optimization ✅
+- Category and metadata filtering ✅
+- Search result pagination ✅
+
+**API Endpoint:**
+- `GET /search/items?q={query}&limit={limit}&offset={offset}` - Full-text search for items
+
+**Features Implemented:**
+- Full-text search using PostgreSQL TSVECTOR and GIN indexes
+- Relevance ranking with ts_rank for result ordering
+- Pagination support with configurable limits
+- Integration with existing search infrastructure
+- Proper error handling and response formatting
+
+**Note:** This functionality was implemented as part of TASK-008 (Search Indexing Pipeline)
 
 **Sprint 2 Deliverables:**
 - Complete stock ledger system

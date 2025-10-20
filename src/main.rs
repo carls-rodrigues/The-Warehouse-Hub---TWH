@@ -5,9 +5,12 @@ mod presentation;
 mod shared;
 
 use crate::application::use_cases::{
-    create_item::CreateItemUseCase, create_location::CreateLocationUseCase,
-    delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
-    get_item::GetItemUseCase, get_location::GetLocationUseCase, list_items::ListItemsUseCase,
+    adjust_stock::AdjustStockUseCase, create_item::CreateItemUseCase,
+    create_location::CreateLocationUseCase, delete_item::DeleteItemUseCase,
+    delete_location::DeleteLocationUseCase, get_item::GetItemUseCase,
+    get_location::GetLocationUseCase, get_stock_level::GetStockLevelUseCase,
+    get_stock_movements::GetStockMovementsUseCase,
+    list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
     list_locations::ListLocationsUseCase, login::LoginUseCase, search_use_case::SearchUseCaseImpl,
     update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
 };
@@ -18,9 +21,10 @@ use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_location_repository::PostgresLocationRepository,
     postgres_search_repository::PostgresSearchRepository,
+    postgres_stock_repository::PostgresStockRepository,
     postgres_user_repository::PostgresUserRepository,
 };
-use crate::presentation::routes::search::create_search_routes;
+use crate::presentation::routes::{create_stock_routes, search::create_search_routes};
 use axum::{
     routing::{delete, get, post, put},
     Json, Router,
@@ -32,6 +36,11 @@ use std::{env, sync::Arc};
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Arc<PgPool>,
+    pub user_repository: Arc<PostgresUserRepository>,
+    pub item_repository: Arc<PostgresItemRepository>,
+    pub location_repository: Arc<PostgresLocationRepository>,
+    pub stock_repository: Arc<PostgresStockRepository>,
+    pub search_repository: Arc<PostgresSearchRepository>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
     pub create_item_use_case: Arc<CreateItemUseCase<PostgresItemRepository>>,
     pub get_item_use_case: Arc<GetItemUseCase<PostgresItemRepository>>,
@@ -44,6 +53,28 @@ pub struct AppState {
     pub list_locations_use_case: Arc<ListLocationsUseCase<PostgresLocationRepository>>,
     pub delete_location_use_case: Arc<DeleteLocationUseCase<PostgresLocationRepository>>,
     pub search_use_case: Arc<SearchUseCaseImpl<PostgresSearchRepository>>,
+    pub get_stock_level_use_case: Arc<
+        GetStockLevelUseCase<
+            PostgresStockRepository,
+            PostgresItemRepository,
+            PostgresLocationRepository,
+        >,
+    >,
+    pub list_item_stock_levels_use_case: Arc<
+        ListItemStockLevelsUseCase<
+            PostgresStockRepository,
+            PostgresItemRepository,
+            PostgresLocationRepository,
+        >,
+    >,
+    pub get_stock_movements_use_case: Arc<
+        GetStockMovementsUseCase<
+            PostgresStockRepository,
+            PostgresItemRepository,
+            PostgresLocationRepository,
+        >,
+    >,
+    pub adjust_stock_use_case: Arc<AdjustStockUseCase<PostgresStockRepository>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -72,6 +103,7 @@ async fn main() {
     let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&pool)));
     let location_repository = Arc::new(PostgresLocationRepository::new(Arc::clone(&pool)));
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
+    let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -105,8 +137,30 @@ async fn main() {
 
     let search_use_case = Arc::new(SearchUseCaseImpl::new(Arc::clone(&search_repository)));
 
+    let get_stock_level_use_case = Arc::new(GetStockLevelUseCase::new(
+        Arc::clone(&stock_repository),
+        Arc::clone(&item_repository),
+        Arc::clone(&location_repository),
+    ));
+    let list_item_stock_levels_use_case = Arc::new(ListItemStockLevelsUseCase::new(
+        Arc::clone(&stock_repository),
+        Arc::clone(&item_repository),
+        Arc::clone(&location_repository),
+    ));
+    let get_stock_movements_use_case = Arc::new(GetStockMovementsUseCase::new(
+        Arc::clone(&stock_repository),
+        Arc::clone(&item_repository),
+        Arc::clone(&location_repository),
+    ));
+    let adjust_stock_use_case = Arc::new(AdjustStockUseCase::new(Arc::clone(&stock_repository)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
+        user_repository: Arc::clone(&user_repository),
+        item_repository: Arc::clone(&item_repository),
+        location_repository: Arc::clone(&location_repository),
+        stock_repository: Arc::clone(&stock_repository),
+        search_repository: Arc::clone(&search_repository),
         login_use_case,
         create_item_use_case,
         get_item_use_case,
@@ -119,6 +173,10 @@ async fn main() {
         list_locations_use_case,
         delete_location_use_case,
         search_use_case,
+        get_stock_level_use_case,
+        list_item_stock_levels_use_case,
+        get_stock_movements_use_case,
+        adjust_stock_use_case,
     };
 
     // Build the application with routes
@@ -136,6 +194,7 @@ async fn main() {
         .route("/locations/{id}", put(update_location_handler))
         .route("/locations/{id}", delete(delete_location_handler))
         .merge(create_search_routes())
+        .merge(create_stock_routes())
         .with_state(app_state);
 
     // Run the server
