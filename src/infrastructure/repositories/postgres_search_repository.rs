@@ -84,8 +84,8 @@ impl SearchRepository for PostgresSearchRepository {
                 sqlx::query(sql)
                     .bind(&query.query)
                     .bind(entity_types.as_slice())
-                    .bind(limit as i64)
-                    .bind(offset as i64)
+                    .bind(limit)
+                    .bind(offset)
             } else {
                 let sql = r#"
                     SELECT entity_type, entity_id, ts_rank(search_vector, query) as rank, metadata
@@ -93,10 +93,7 @@ impl SearchRepository for PostgresSearchRepository {
                     WHERE search_vector @@ query
                     ORDER BY rank DESC LIMIT $2 OFFSET $3
                 "#;
-                sqlx::query(sql)
-                    .bind(&query.query)
-                    .bind(limit as i64)
-                    .bind(offset as i64)
+                sqlx::query(sql).bind(&query.query).bind(limit).bind(offset)
             }
         } else {
             let sql = r#"
@@ -105,16 +102,13 @@ impl SearchRepository for PostgresSearchRepository {
                 WHERE search_vector @@ query
                 ORDER BY rank DESC LIMIT $2 OFFSET $3
             "#;
-            sqlx::query(sql)
-                .bind(&query.query)
-                .bind(limit as i64)
-                .bind(offset as i64)
+            sqlx::query(sql).bind(&query.query).bind(limit).bind(offset)
         };
 
         let rows = query_builder
             .fetch_all(&*self.pool)
             .await
-            .map_err(|e| DomainError::ValidationError(format!("Search failed: {}", e)))?;
+            .map_err(|e| DomainError::ValidationError(format!("Search failed: {e}")))?;
 
         let mut results = Vec::new();
         for row in rows {
@@ -145,7 +139,7 @@ impl SearchRepository for PostgresSearchRepository {
             .bind(&query.query)
             .fetch_one(&*self.pool)
             .await
-            .map_err(|e| DomainError::ValidationError(format!("Count failed: {}", e)))?;
+            .map_err(|e| DomainError::ValidationError(format!("Count failed: {e}")))?;
 
         Ok(SearchResult {
             query: query.query,
@@ -170,7 +164,7 @@ impl SearchRepository for PostgresSearchRepository {
         .bind(entity_id)
         .fetch_optional(&*self.pool)
         .await
-        .map_err(|e| DomainError::ValidationError(format!("Failed to get document: {}", e)))?;
+        .map_err(|e| DomainError::ValidationError(format!("Failed to get document: {e}")))?;
 
         match row {
             Some(row) => {
@@ -210,7 +204,7 @@ impl SearchRepository for PostgresSearchRepository {
             .execute(&*self.pool)
             .await
             .map_err(|e| {
-                DomainError::ValidationError(format!("Failed to truncate search index: {}", e))
+                DomainError::ValidationError(format!("Failed to truncate search index: {e}"))
             })?;
 
         // Note: In a real implementation, you would then re-index all entities
@@ -230,7 +224,7 @@ impl SearchRepository for PostgresSearchRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| {
-            DomainError::ValidationError(format!("Failed to cleanup item documents: {}", e))
+            DomainError::ValidationError(format!("Failed to cleanup item documents: {e}"))
         })?;
 
         // Remove search documents for locations that no longer exist
@@ -244,7 +238,7 @@ impl SearchRepository for PostgresSearchRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| {
-            DomainError::ValidationError(format!("Failed to cleanup location documents: {}", e))
+            DomainError::ValidationError(format!("Failed to cleanup location documents: {e}"))
         })?;
 
         Ok(item_cleanup.rows_affected() as i64 + location_cleanup.rows_affected() as i64)
