@@ -61,6 +61,7 @@ use axum::{
 use serde::Serialize;
 use sqlx::PgPool;
 use std::{env, sync::Arc};
+use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -542,6 +543,12 @@ async fn main() {
         .merge(tenant_routes())
         .merge(create_admin_router())
         .merge(export_routes::create_exports_router())
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .with_state(app_state);
 
     // Start background cleanup job for expired sandboxes

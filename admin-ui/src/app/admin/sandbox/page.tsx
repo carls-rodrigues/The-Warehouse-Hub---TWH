@@ -10,22 +10,29 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus, Users, Settings, Trash2, Play, Pause } from "lucide-react"
-import { useState } from "react"
+import { Plus, Users, Settings, Trash2, Play, Pause, AlertCircle, RefreshCw } from "lucide-react"
+import { useEffect, useState } from "react"
+import { adminApi, ApiError } from "@/lib/api"
 
-interface Sandbox {
+interface SandboxTenant {
   id: string
   name: string
-  tenantId: string
-  status: 'active' | 'paused' | 'suspended'
-  createdAt: string
-  lastActivity: string
-  webhookUrl: string
-  description?: string
+  status: 'PROVISIONING' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'DELETING'
+  created_at: string
+  expires_at: string
+}
+
+interface SandboxesResponse {
+  sandboxes: SandboxTenant[]
 }
 
 export default function SandboxManagement() {
+  const [sandboxesData, setSandboxesData] = useState<SandboxesResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isCleaningUp, setIsCleaningUp] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<{ success: boolean; message: string } | null>(null)
   const [newSandbox, setNewSandbox] = useState({
     name: '',
     tenantId: '',
@@ -33,150 +40,187 @@ export default function SandboxManagement() {
     description: ''
   })
 
-  // Mock data - in real app this would come from API
-  const [sandboxes, setSandboxes] = useState<Sandbox[]>([
-    {
-      id: "sandbox-001",
-      name: "E-commerce Integration Test",
-      tenantId: "tenant-abc-123",
-      status: "active",
-      createdAt: "2024-01-10T08:00:00Z",
-      lastActivity: "2024-01-15T14:30:00Z",
-      webhookUrl: "https://test.example.com/webhooks",
-      description: "Testing inventory sync and order processing"
-    },
-    {
-      id: "sandbox-002",
-      name: "Logistics Partner Sandbox",
-      tenantId: "tenant-def-456",
-      status: "active",
-      createdAt: "2024-01-12T10:15:00Z",
-      lastActivity: "2024-01-15T12:45:00Z",
-      webhookUrl: "https://logistics.test.com/events",
-      description: "Shipment tracking and delivery notifications"
-    },
-    {
-      id: "sandbox-003",
-      name: "Payment Gateway Test",
-      tenantId: "tenant-ghi-789",
-      status: "paused",
-      createdAt: "2024-01-08T16:20:00Z",
-      lastActivity: "2024-01-14T09:10:00Z",
-      webhookUrl: "https://payments.test.com/webhooks",
-      description: "Payment processing and refund handling"
+  useEffect(() => {
+    fetchSandboxes()
+  }, [])
+
+  const fetchSandboxes = async () => {
+    try {
+      setLoading(true)
+      const data = await adminApi.getSandboxes()
+      setSandboxesData(data)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(`Failed to load sandboxes: ${err.message}`)
+      } else {
+        setError('Failed to load sandboxes')
+      }
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
-  const handleCreateSandbox = () => {
-    const sandbox: Sandbox = {
-      id: `sandbox-${Date.now()}`,
-      name: newSandbox.name,
-      tenantId: newSandbox.tenantId,
-      status: "active",
-      createdAt: new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-      webhookUrl: newSandbox.webhookUrl,
-      description: newSandbox.description
+  const handleCleanupExpired = async () => {
+    try {
+      setIsCleaningUp(true)
+      setCleanupResult(null)
+      const result = await adminApi.cleanupExpiredSandboxes()
+      setCleanupResult({ success: true, message: result.message })
+
+      // Refresh the list after cleanup
+      await fetchSandboxes()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setCleanupResult({ success: false, message: `Failed: ${err.message}` })
+      } else {
+        setCleanupResult({ success: false, message: 'Failed to cleanup expired sandboxes' })
+      }
+    } finally {
+      setIsCleaningUp(false)
     }
-    setSandboxes([...sandboxes, sandbox])
-    setNewSandbox({ name: '', tenantId: '', webhookUrl: '', description: '' })
-    setIsCreateDialogOpen(false)
   }
 
-  const handleStatusChange = (id: string, newStatus: Sandbox['status']) => {
-    setSandboxes(sandboxes.map(sb =>
-      sb.id === id ? { ...sb, status: newStatus } : sb
-    ))
-  }
-
-  const handleDeleteSandbox = (id: string) => {
-    setSandboxes(sandboxes.filter(sb => sb.id !== id))
-  }
-
-  const getStatusBadge = (status: Sandbox['status']) => {
+  const getStatusBadge = (status: SandboxTenant['status']) => {
     switch (status) {
-      case 'active':
+      case 'ACTIVE':
         return <Badge className="bg-green-100 text-green-800">Active</Badge>
-      case 'paused':
-        return <Badge variant="secondary">Paused</Badge>
-      case 'suspended':
-        return <Badge variant="destructive">Suspended</Badge>
+      case 'PROVISIONING':
+        return <Badge variant="secondary">Provisioning</Badge>
+      case 'EXPIRED':
+        return <Badge variant="destructive">Expired</Badge>
+      case 'SUSPENDED':
+        return <Badge className="bg-yellow-100 text-yellow-800">Suspended</Badge>
+      case 'DELETING':
+        return <Badge className="bg-red-100 text-red-800">Deleting</Badge>
+      default:
+        return <Badge variant="outline">{status}</Badge>
     }
   }
+
+  const getDaysUntilExpiry = (expiresAt: string) => {
+    const now = new Date()
+    const expiry = new Date(expiresAt)
+    const diffTime = expiry.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Loading sandboxes...</div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-600 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            {error}
+          </div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  const sandboxes = sandboxesData?.sandboxes || []
+  const activeSandboxes = sandboxes.filter(s => s.status === 'ACTIVE').length
+  const expiredSandboxes = sandboxes.filter(s => s.status === 'EXPIRED').length
+  const provisioningSandboxes = sandboxes.filter(s => s.status === 'PROVISIONING').length
 
   return (
     <AdminLayout>
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold md:text-2xl">Sandbox Management</h1>
-          <p className="text-muted-foreground">Create and manage sandbox environments for testing</p>
-        </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Sandbox
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Sandbox</DialogTitle>
-              <DialogDescription>
-                Set up a new sandbox environment for testing webhook integrations
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="name">Sandbox Name</Label>
-                <Input
-                  id="name"
-                  value={newSandbox.name}
-                  onChange={(e) => setNewSandbox({...newSandbox, name: e.target.value})}
-                  placeholder="E-commerce Integration Test"
-                />
-              </div>
-              <div>
-                <Label htmlFor="tenantId">Tenant ID</Label>
-                <Input
-                  id="tenantId"
-                  value={newSandbox.tenantId}
-                  onChange={(e) => setNewSandbox({...newSandbox, tenantId: e.target.value})}
-                  placeholder="tenant-abc-123"
-                />
-              </div>
-              <div>
-                <Label htmlFor="webhookUrl">Webhook URL</Label>
-                <Input
-                  id="webhookUrl"
-                  value={newSandbox.webhookUrl}
-                  onChange={(e) => setNewSandbox({...newSandbox, webhookUrl: e.target.value})}
-                  placeholder="https://test.example.com/webhooks"
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description (Optional)</Label>
-                <Textarea
-                  id="description"
-                  value={newSandbox.description}
-                  onChange={(e) => setNewSandbox({...newSandbox, description: e.target.value})}
-                  placeholder="Purpose and testing scope"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateSandbox} disabled={!newSandbox.name || !newSandbox.tenantId || !newSandbox.webhookUrl}>
+        <h1 className="text-lg font-semibold md:text-2xl">Sandbox Management</h1>
+        <div className="flex items-center gap-2">
+          <Button onClick={fetchSandboxes} variant="outline" size="sm">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+          <Button onClick={handleCleanupExpired} disabled={isCleaningUp} variant="outline" size="sm">
+            {isCleaningUp ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Cleaning...
+              </>
+            ) : (
+              <>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Cleanup Expired
+              </>
+            )}
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="mr-2 h-4 w-4" />
                 Create Sandbox
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Sandbox</DialogTitle>
+                <DialogDescription>
+                  Create a new sandbox tenant for testing and development
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Sandbox Name</Label>
+                  <Input
+                    id="name"
+                    value={newSandbox.name}
+                    onChange={(e) => setNewSandbox(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Enter sandbox name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="tenantId">Tenant ID (Optional)</Label>
+                  <Input
+                    id="tenantId"
+                    value={newSandbox.tenantId}
+                    onChange={(e) => setNewSandbox(prev => ({ ...prev, tenantId: e.target.value }))}
+                    placeholder="Auto-generated if empty"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="webhookUrl">Webhook URL</Label>
+                  <Input
+                    id="webhookUrl"
+                    value={newSandbox.webhookUrl}
+                    onChange={(e) => setNewSandbox(prev => ({ ...prev, webhookUrl: e.target.value }))}
+                    placeholder="https://your-app.com/webhooks"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newSandbox.description}
+                    onChange={(e) => setNewSandbox(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Optional description"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => setIsCreateDialogOpen(false)}>
+                  Create Sandbox
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="grid gap-4 md:gap-8 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 mt-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Sandboxes</CardTitle>
@@ -185,111 +229,119 @@ export default function SandboxManagement() {
           <CardContent>
             <div className="text-2xl font-bold">{sandboxes.length}</div>
             <p className="text-xs text-muted-foreground">
-              {sandboxes.filter(sb => sb.status === 'active').length} active
+              total sandbox tenants
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Sandboxes</CardTitle>
+            <CardTitle className="text-sm font-medium">Active</CardTitle>
             <Play className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {sandboxes.filter(sb => sb.status === 'active').length}
-            </div>
+            <div className="text-2xl font-bold">{activeSandboxes}</div>
             <p className="text-xs text-muted-foreground">
-              Currently running
+              currently active
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Paused Sandboxes</CardTitle>
+            <CardTitle className="text-sm font-medium">Provisioning</CardTitle>
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{provisioningSandboxes}</div>
+            <p className="text-xs text-muted-foreground">
+              being set up
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired</CardTitle>
             <Pause className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {sandboxes.filter(sb => sb.status === 'paused').length}
-            </div>
+            <div className="text-2xl font-bold">{expiredSandboxes}</div>
             <p className="text-xs text-muted-foreground">
-              Temporarily stopped
+              need cleanup
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
+      <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Sandbox Environments</CardTitle>
+          <CardTitle>Sandbox Tenants</CardTitle>
           <CardDescription>
-            Manage sandbox tenants and their webhook configurations
+            Manage sandbox environments for testing and development
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Tenant ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Activity</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sandboxes.map((sandbox) => (
-                <TableRow key={sandbox.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{sandbox.name}</div>
-                      {sandbox.description && (
-                        <div className="text-sm text-muted-foreground">{sandbox.description}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">{sandbox.tenantId}</TableCell>
-                  <TableCell>{getStatusBadge(sandbox.status)}</TableCell>
-                  <TableCell className="text-sm">
-                    {new Date(sandbox.lastActivity).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Select
-                        value={sandbox.status}
-                        onValueChange={(value: Sandbox['status']) => handleStatusChange(sandbox.id, value)}
-                      >
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="paused">Pause</SelectItem>
-                          <SelectItem value="suspended">Suspend</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Button variant="outline" size="sm">
-                        <Settings className="h-3 w-3" />
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteSandbox(sandbox.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {sandboxes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No sandboxes found
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Days Left</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sandboxes.map((sandbox) => {
+                  const daysLeft = getDaysUntilExpiry(sandbox.expires_at)
+                  return (
+                    <TableRow key={sandbox.id}>
+                      <TableCell className="font-medium">{sandbox.name}</TableCell>
+                      <TableCell>{getStatusBadge(sandbox.status)}</TableCell>
+                      <TableCell>
+                        {new Date(sandbox.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(sandbox.expires_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <span className={daysLeft < 7 ? 'text-red-600 font-semibold' : daysLeft < 30 ? 'text-yellow-600' : ''}>
+                          {daysLeft} days
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm">
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                          {sandbox.status === 'EXPIRED' && (
+                            <Button variant="outline" size="sm">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
+
+      {cleanupResult && (
+        <div className={`mt-4 p-4 rounded-md ${cleanupResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+          {cleanupResult.message}
+        </div>
+      )}
     </AdminLayout>
   )
 }

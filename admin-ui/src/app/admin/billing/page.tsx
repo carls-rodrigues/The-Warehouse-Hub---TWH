@@ -1,122 +1,94 @@
+"use client"
+
 import AdminLayout from "@/components/admin-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
-import { DollarSign, TrendingUp, Users, CreditCard, Download, Calendar } from "lucide-react"
+import { DollarSign, TrendingUp, Users, Database, Package, MapPin, ShoppingCart, Truck, Webhook, Calendar, AlertCircle } from "lucide-react"
+import { useEffect, useState } from "react"
+import { adminApi, ApiError } from "@/lib/api"
 
-interface Invoice {
-  id: string
-  tenantId: string
-  tenantName: string
-  amount: number
-  status: 'paid' | 'pending' | 'overdue'
-  issuedAt: string
-  dueAt: string
-  period: string
-}
-
-interface UsageMetric {
-  tenantId: string
-  tenantName: string
-  webhooksSent: number
-  webhooksFailed: number
-  dataTransferred: number // in MB
-  apiCalls: number
-  currentMonthSpend: number
+interface BillingMetrics {
+  total_api_calls: number
+  storage_used_gb: number
+  active_tenants: number
+  total_items: number
+  total_locations: number
+  total_orders: number
+  total_transfers: number
+  webhook_deliveries: {
+    total: number
+    successful: number
+    failed: number
+  }
+  billing_period: {
+    start_date: string
+    end_date: string
+    days_remaining: number
+  }
 }
 
 export default function BillingManagement() {
-  // Mock data - in real app this would come from API
-  const invoices: Invoice[] = [
-    {
-      id: "inv-001",
-      tenantId: "tenant-abc-123",
-      tenantName: "E-commerce Corp",
-      amount: 1250.00,
-      status: "paid",
-      issuedAt: "2024-01-01T00:00:00Z",
-      dueAt: "2024-01-15T00:00:00Z",
-      period: "December 2023"
-    },
-    {
-      id: "inv-002",
-      tenantId: "tenant-def-456",
-      tenantName: "Logistics Plus",
-      amount: 890.50,
-      status: "paid",
-      issuedAt: "2024-01-01T00:00:00Z",
-      dueAt: "2024-01-15T00:00:00Z",
-      period: "December 2023"
-    },
-    {
-      id: "inv-003",
-      tenantId: "tenant-ghi-789",
-      tenantName: "Payment Solutions Inc",
-      amount: 2100.75,
-      status: "pending",
-      issuedAt: "2024-01-15T00:00:00Z",
-      dueAt: "2024-01-30T00:00:00Z",
-      period: "January 2024"
-    },
-    {
-      id: "inv-004",
-      tenantId: "tenant-jkl-012",
-      tenantName: "Retail Chain Ltd",
-      amount: 675.25,
-      status: "overdue",
-      issuedAt: "2024-01-01T00:00:00Z",
-      dueAt: "2024-01-15T00:00:00Z",
-      period: "December 2023"
-    }
-  ]
+  const [metrics, setMetrics] = useState<BillingMetrics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const usageMetrics: UsageMetric[] = [
-    {
-      tenantId: "tenant-abc-123",
-      tenantName: "E-commerce Corp",
-      webhooksSent: 45230,
-      webhooksFailed: 45,
-      dataTransferred: 1250.5,
-      apiCalls: 89200,
-      currentMonthSpend: 1250.00
-    },
-    {
-      tenantId: "tenant-def-456",
-      tenantName: "Logistics Plus",
-      webhooksSent: 28900,
-      webhooksFailed: 12,
-      dataTransferred: 780.2,
-      apiCalls: 45600,
-      currentMonthSpend: 890.50
-    },
-    {
-      tenantId: "tenant-ghi-789",
-      tenantName: "Payment Solutions Inc",
-      webhooksSent: 67800,
-      webhooksFailed: 23,
-      dataTransferred: 2100.8,
-      apiCalls: 125000,
-      currentMonthSpend: 2100.75
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        setLoading(true)
+        const data = await adminApi.getBillingMetrics()
+        setMetrics(data)
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(`Failed to load billing metrics: ${err.message}`)
+        } else {
+          setError('Failed to load billing metrics')
+        }
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
 
-  const totalRevenue = invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + inv.amount, 0)
-  const pendingRevenue = invoices.filter(inv => inv.status === 'pending').reduce((sum, inv) => sum + inv.amount, 0)
-  const overdueRevenue = invoices.filter(inv => inv.status === 'overdue').reduce((sum, inv) => sum + inv.amount, 0)
+    fetchMetrics()
+  }, [])
 
-  const getStatusBadge = (status: Invoice['status']) => {
-    switch (status) {
-      case 'paid':
-        return <Badge className="bg-green-100 text-green-800">Paid</Badge>
-      case 'pending':
-        return <Badge variant="secondary">Pending</Badge>
-      case 'overdue':
-        return <Badge variant="destructive">Overdue</Badge>
-    }
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Loading billing metrics...</div>
+        </div>
+      </AdminLayout>
+    )
   }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-600 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            {error}
+          </div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  if (!metrics) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">No billing data available</div>
+        </div>
+      </AdminLayout>
+    )
+  }
+
+  const webhookSuccessRate = metrics.webhook_deliveries.total > 0
+    ? (metrics.webhook_deliveries.successful / metrics.webhook_deliveries.total) * 100
+    : 0
 
   return (
     <AdminLayout>
@@ -124,182 +96,142 @@ export default function BillingManagement() {
         <h1 className="text-lg font-semibold md:text-2xl">Billing & Usage</h1>
       </div>
 
-      <div className="grid gap-4 md:gap-8 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 mt-6">
+        {/* Billing Period */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Billing Period</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{metrics.billing_period.days_remaining}</div>
             <p className="text-xs text-muted-foreground">
-              +12% from last month
+              days remaining
             </p>
+            <div className="mt-2 text-xs">
+              {new Date(metrics.billing_period.start_date).toLocaleDateString()} - {new Date(metrics.billing_period.end_date).toLocaleDateString()}
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${pendingRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Due this month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${overdueRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              Requires attention
-            </p>
-          </CardContent>
-        </Card>
-
+        {/* Active Tenants */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Tenants</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{usageMetrics.length}</div>
+            <div className="text-2xl font-bold">{metrics.active_tenants}</div>
             <p className="text-xs text-muted-foreground">
-              Paying customers
+              total active tenants
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* API Calls */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">API Calls</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.total_api_calls.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              this billing period
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Storage Used */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+            <Database className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.storage_used_gb} GB</div>
+            <p className="text-xs text-muted-foreground">
+              total storage used
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="invoices" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-          <TabsTrigger value="usage">Usage Analytics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="invoices" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoice Management</CardTitle>
-              <CardDescription>
-                View and manage customer invoices and payment status
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Invoice ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="font-mono text-sm">{invoice.id}</TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{invoice.tenantName}</div>
-                          <div className="text-sm text-muted-foreground">{invoice.tenantId}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{invoice.period}</TableCell>
-                      <TableCell className="font-medium">${invoice.amount.toFixed(2)}</TableCell>
-                      <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">
-                            {new Date(invoice.dueAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm">
-                          <Download className="h-3 w-3 mr-1" />
-                          Download
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="usage" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Usage Analytics</CardTitle>
-              <CardDescription>
-                Monitor tenant usage and spending patterns
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {usageMetrics.map((metric) => (
-                  <div key={metric.tenantId} className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium">{metric.tenantName}</h3>
-                        <p className="text-sm text-muted-foreground">{metric.tenantId}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold">${metric.currentMonthSpend.toFixed(2)}</div>
-                        <p className="text-xs text-muted-foreground">Current month</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <div className="text-sm font-medium">Webhooks Sent</div>
-                        <div className="text-2xl font-bold">{metric.webhooksSent.toLocaleString()}</div>
-                        <Progress value={(metric.webhooksSent / 100000) * 100} className="mt-2" />
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-medium">Success Rate</div>
-                        <div className="text-2xl font-bold">
-                          {((metric.webhooksSent - metric.webhooksFailed) / metric.webhooksSent * 100).toFixed(1)}%
-                        </div>
-                        <Progress
-                          value={((metric.webhooksSent - metric.webhooksFailed) / metric.webhooksSent * 100)}
-                          className="mt-2"
-                        />
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-medium">Data Transferred</div>
-                        <div className="text-2xl font-bold">{metric.dataTransferred.toFixed(1)} MB</div>
-                        <Progress value={(metric.dataTransferred / 2500) * 100} className="mt-2" />
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-medium">API Calls</div>
-                        <div className="text-2xl font-bold">{metric.apiCalls.toLocaleString()}</div>
-                        <Progress value={(metric.apiCalls / 150000) * 100} className="mt-2" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
+        {/* Inventory Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Inventory Overview</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Items</span>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              <span className="font-semibold">{metrics.total_items.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Locations</span>
+              </div>
+              <span className="font-semibold">{metrics.total_locations.toLocaleString()}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transaction Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Transactions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Orders</span>
+              </div>
+              <span className="font-semibold">{metrics.total_orders.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Transfers</span>
+              </div>
+              <span className="font-semibold">{metrics.total_transfers.toLocaleString()}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Webhook Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Webhook Deliveries</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Total</span>
+              <span className="font-semibold">{metrics.webhook_deliveries.total.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-green-600">Successful</span>
+              <span className="font-semibold text-green-600">{metrics.webhook_deliveries.successful.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-red-600">Failed</span>
+              <span className="font-semibold text-red-600">{metrics.webhook_deliveries.failed.toLocaleString()}</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Success Rate</span>
+                <span>{webhookSuccessRate.toFixed(1)}%</span>
+              </div>
+              <Progress value={webhookSuccessRate} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </AdminLayout>
   )
 }
