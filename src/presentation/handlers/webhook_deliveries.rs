@@ -32,8 +32,8 @@ pub async fn get_webhook_deliveries(
     Path(webhook_id): Path<Uuid>,
     Query(pagination): Query<PaginationQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
-    // For now, use a hardcoded user ID - authentication will be added later
-    let user_id = Uuid::new_v4();
+    // For now, use the user ID from login - authentication middleware will be added later
+    let user_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
 
     let use_case = GetWebhookDeliveriesUseCase::new(state.webhook_repository.clone());
 
@@ -65,8 +65,8 @@ pub async fn get_webhook_delivery_details(
     State(state): State<AppState>,
     Path(delivery_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
-    // For now, use a hardcoded user ID - authentication will be added later
-    let user_id = Uuid::new_v4();
+    // For now, use the user ID from login - authentication middleware will be added later
+    let user_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
 
     let use_case = GetWebhookDeliveryDetailsUseCase::new(state.webhook_repository.clone());
 
@@ -95,8 +95,8 @@ pub async fn test_webhook(
     State(state): State<AppState>,
     Path(webhook_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
-    // For now, use a hardcoded user ID - authentication will be added later
-    let user_id = Uuid::new_v4();
+    // For now, use the user ID from login - authentication middleware will be added later
+    let user_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
 
     let use_case = TestWebhookUseCase::new(
         state.webhook_repository.clone(),
@@ -128,8 +128,8 @@ pub async fn retry_webhook_delivery(
     State(state): State<AppState>,
     Path(delivery_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
-    // For now, use a hardcoded user ID - authentication will be added later
-    let user_id = Uuid::new_v4();
+    // For now, use the user ID from login - authentication middleware will be added later
+    let user_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
 
     let use_case = RetryWebhookDeliveryUseCase::new(
         state.webhook_dispatcher.clone(),
