@@ -64,6 +64,12 @@ pub trait WebhookRepository: Send + Sync {
     /// Get delivery by ID
     async fn get_delivery(&self, id: Uuid) -> Result<Option<WebhookDelivery>, DomainError>;
 
+    /// Get event by ID
+    async fn get_event(&self, id: Uuid) -> Result<Option<WebhookEvent>, DomainError>;
+
+    /// Count deliveries for a webhook
+    async fn count_webhook_deliveries(&self, webhook_id: Uuid) -> Result<i64, DomainError>;
+
     /// Clean up old events and deliveries (for maintenance)
     async fn cleanup_old_data(&self, days_old: i32) -> Result<(), DomainError>;
 }

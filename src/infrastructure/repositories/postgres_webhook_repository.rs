@@ -536,6 +536,52 @@ impl WebhookRepository for PostgresWebhookRepository {
         }
     }
 
+    async fn get_event(&self, id: Uuid) -> Result<Option<WebhookEvent>, DomainError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id, event_type, payload, created_at
+            FROM webhook_events
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| DomainError::DatabaseError(format!("Failed to get event: {}", e)))?;
+
+        match row {
+            Some(row) => {
+                let event_type = WebhookEventType::from_str(&row.event_type).map_err(|e| {
+                    DomainError::DatabaseError(format!("Invalid event type: {}", e))
+                })?;
+
+                Ok(Some(WebhookEvent {
+                    id: row.id,
+                    event_type,
+                    payload: row.payload,
+                    created_at: row.created_at,
+                }))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn count_webhook_deliveries(&self, webhook_id: Uuid) -> Result<i64, DomainError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT COUNT(*) as count
+            FROM webhook_deliveries
+            WHERE webhook_id = $1
+            "#,
+            webhook_id
+        )
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| DomainError::DatabaseError(format!("Failed to count deliveries: {}", e)))?;
+
+        Ok(row.count.unwrap_or(0))
+    }
+
     async fn cleanup_old_data(&self, days_old: i32) -> Result<(), DomainError> {
         // Clean up old events (keep last 30 days)
         sqlx::query!(

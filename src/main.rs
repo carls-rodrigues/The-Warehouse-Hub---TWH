@@ -24,6 +24,7 @@ use crate::application::use_cases::{
 };
 use crate::domain::services::export_service::{ExportService, ExportServiceImpl};
 use crate::domain::services::webhook_dispatcher::{WebhookDispatcher, WebhookDispatcherImpl};
+use crate::domain::services::webhook_repository::WebhookRepository;
 use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
 };
@@ -161,6 +162,28 @@ pub struct AppState {
     >,
     pub webhook_repository: Arc<PostgresWebhookRepository>,
     pub webhook_dispatcher: Arc<WebhookDispatcherImpl<PostgresWebhookRepository>>,
+    pub get_webhook_deliveries_use_case: Arc<
+        crate::application::use_cases::get_webhook_deliveries::GetWebhookDeliveriesUseCase<
+            PostgresWebhookRepository,
+        >,
+    >,
+    pub get_webhook_delivery_details_use_case: Arc<
+        crate::application::use_cases::get_webhook_deliveries::GetWebhookDeliveryDetailsUseCase<
+            PostgresWebhookRepository,
+        >,
+    >,
+    pub test_webhook_use_case: Arc<
+        crate::application::use_cases::test_webhook::TestWebhookUseCase<
+            PostgresWebhookRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub retry_webhook_delivery_use_case: Arc<
+        crate::application::use_cases::retry_webhook_delivery::RetryWebhookDeliveryUseCase<
+            PostgresWebhookRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
     pub report_service: Arc<ReportServiceImpl<PostgresItemRepository, PostgresStockRepository>>,
     pub get_low_stock_report_use_case: Arc<
         GetLowStockReportUseCase<
@@ -216,6 +239,25 @@ async fn main() {
 
     let webhook_repository = Arc::new(PostgresWebhookRepository::new(Arc::clone(&pool)));
     let webhook_dispatcher = Arc::new(WebhookDispatcherImpl::new(Arc::clone(&webhook_repository)));
+
+    let get_webhook_deliveries_use_case = Arc::new(
+        crate::application::use_cases::get_webhook_deliveries::GetWebhookDeliveriesUseCase::new(
+            Arc::clone(&webhook_repository),
+        ),
+    );
+    let get_webhook_delivery_details_use_case = Arc::new(crate::application::use_cases::get_webhook_deliveries::GetWebhookDeliveryDetailsUseCase::new(Arc::clone(&webhook_repository)));
+    let test_webhook_use_case = Arc::new(
+        crate::application::use_cases::test_webhook::TestWebhookUseCase::new(
+            Arc::clone(&webhook_repository),
+            Arc::clone(&webhook_dispatcher),
+        ),
+    );
+    let retry_webhook_delivery_use_case = Arc::new(
+        crate::application::use_cases::retry_webhook_delivery::RetryWebhookDeliveryUseCase::new(
+            Arc::clone(&webhook_dispatcher),
+            Arc::clone(&webhook_repository),
+        ),
+    );
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -377,6 +419,10 @@ async fn main() {
         adjust_stock_use_case,
         webhook_repository,
         webhook_dispatcher,
+        get_webhook_deliveries_use_case: Arc::clone(&get_webhook_deliveries_use_case),
+        get_webhook_delivery_details_use_case: Arc::clone(&get_webhook_delivery_details_use_case),
+        test_webhook_use_case: Arc::clone(&test_webhook_use_case),
+        retry_webhook_delivery_use_case: Arc::clone(&retry_webhook_delivery_use_case),
         report_service,
         get_low_stock_report_use_case,
         get_stock_valuation_report_use_case,
