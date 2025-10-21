@@ -1,7 +1,7 @@
 # The Warehouse Hub (TWH) - Implementation Progress
 
-**Last Updated:** October 20, 2025  
-**Current Status:** SPRINT 1 COMPLETE ✅ | SPRINT 2 COMPLETE ✅ | SPRINT 3 COMPLETE ✅ | SPRINT 4 COMPLETE ✅
+**Last Updated:** October 21, 2025  
+**Current Status:** SPRINT 1 COMPLETE ✅ | SPRINT 2 COMPLETE ✅ | SPRINT 3 COMPLETE ✅ | SPRINT 4 IN PROGRESS 🔄 (75% Complete)
 
 ---
 
@@ -784,210 +784,173 @@ DELETE /items/{id}
 
 ---
 
-## 🚀 SPRINT 4: WEBHOOK INTEGRATION COMPLETE ✅ (32h Total)
-**Status:** ✅ **PRODUCTION READY** - *COMPLETED October 20, 2025*
+## 🚀 SPRINT 4: ASYNC & REPORTING FEATURES (75% Complete)
+**Status:** 🔄 **IN PROGRESS** - *UPDATED October 21, 2025*
 
-### ✅ TASK-025: Webhook System Implementation (32h)
-**Status:** ✅ **PRODUCTION READY**
+### ✅ TASK-006: Webhook Dispatcher Implementation (8h)
+**Status:** ✅ **COMPLETED October 20, 2025**
+
+Complete webhook infrastructure with async dispatching, PostgreSQL storage, and event-driven architecture.
+
+### ✅ TASK-025: Reports Endpoints (12h)
+**Status:** ✅ **COMPLETED October 20, 2025**
+
+Comprehensive reports API with pagination, filtering, and multiple report types (inventory valuation, stock movements, low stock alerts).
+
+### ✅ TASK-007: Jobs API and Worker Framework (16h)
+**Status:** ✅ **COMPLETED October 21, 2025**
 
 **Complete Implementation:**
-- **Event-Driven Architecture:** Real-time webhook notifications for all major business operations
-- **Async Processing:** Non-blocking webhook dispatching using `tokio::spawn` to avoid impacting business logic performance
-- **Comprehensive Event Coverage:** Webhook events for sales orders, transfers, returns, and purchase orders
-- **Error Isolation:** Webhook failures logged but don't affect core business operations
-- **Clean Architecture Integration:** WebhookDispatcher trait with PostgreSQL storage implementation
+- **Async Job Processing:** Full tokio-based job processing framework with database persistence
+- **REST API:** `POST /jobs` for job creation, `GET /jobs/{jobId}` for status retrieval
+- **Status Tracking:** Complete job lifecycle (Queued → Running → Success/Failed/PartialSuccess)
+- **Progress Monitoring:** Percentage-based progress updates with timestamps
+- **Error Handling:** Structured error storage and retrieval
+- **Clean Architecture:** Proper separation across domain/application/infrastructure layers
 
-#### ✅ Webhook-Enabled Use Cases
+#### ✅ Jobs API Components
 
-**1. ShipSalesOrderUseCase Webhook Integration** ✅
-- **File:** `src/application/use_cases/ship_sales_order.rs`
-- **Event Type:** `SalesOrderUpdated`
-- **Trigger:** When sales orders are shipped
-- **Payload:** Complete sales order data with status, lines, and stock movements
-- **Implementation:** Async webhook dispatching using `tokio::spawn`
+**1. Domain Layer** ✅
+- **Job Entity:** `src/domain/entities/job.rs` - Status enum, validation, lifecycle methods
+- **JobRepository Trait:** `src/domain/services/job_repository.rs` - Data access abstraction
+- **JobService Trait:** `src/domain/services/job_service.rs` - Business logic interface
+- **JobProcessor Trait:** `src/domain/services/job_processor.rs` - Job execution contract
 
-**2. ReceiveTransferUseCase Webhook Integration** ✅
-- **File:** `src/application/use_cases/receive_transfer.rs`
-- **Event Type:** `TransferUpdated`
-- **Trigger:** When transfers are received at destination location
-- **Payload:** Transfer data with updated status, lines, and stock movements
-- **Integration:** Added to AppState with WebhookDispatcher dependency
+**2. Infrastructure Layer** ✅
+- **PostgresJobRepository:** `src/infrastructure/repositories/postgres_job_repository.rs` - SQL implementation
+- **JobServiceImpl:** `src/infrastructure/services/job_service_impl.rs` - Business logic
+- **JobWorker Framework:** `src/infrastructure/services/job_worker.rs` - WorkerManager and BasicJobProcessor
+- **Database Schema:** Jobs table with proper indexing and constraints
 
-**3. ShipTransferUseCase Webhook Integration** ✅
-- **File:** `src/application/use_cases/ship_transfer.rs`
-- **Event Type:** `TransferUpdated`
-- **Trigger:** When transfers are shipped from source location
-- **Payload:** Transfer data with shipping status and stock movements
-- **Handler:** Updated `src/presentation/handlers/transfer.rs` to use AppState
+**3. Application Layer** ✅
+- **EnqueueJob Use Case:** `src/application/use_cases/enqueue_job.rs` - Job creation logic
+- **GetJobStatus Use Case:** `src/application/use_cases/get_job_status.rs` - Status retrieval
 
-**4. CreateReturnUseCase Webhook Integration** ✅
-- **File:** `src/application/use_cases/create_return.rs`
-- **Event Type:** `ReturnCreated`
-- **Trigger:** When new returns are created
-- **Payload:** Complete return entity with lines and status
-- **Handler:** Updated `src/presentation/handlers/returns.rs` to use dependency injection
+**4. Presentation Layer** ✅
+- **Jobs Handlers:** `src/presentation/handlers/jobs.rs` - HTTP request/response handling
+- **Jobs Routes:** `src/presentation/routes/jobs.rs` - Axum route configuration
+- **JSON Serialization:** Proper serde mapping with `#[serde(rename = "type")]` for reserved keywords
 
-#### 🔧 Technical Implementation Details
+#### 🧪 Jobs API Testing Results ✅
 
-**Consistent Architecture Pattern:**
-```rust
-// All webhook-enabled use cases follow this pattern:
-pub struct UseCaseName<T: Repository, D: WebhookDispatcher + 'static> {
-    repository: Arc<T>,
-    webhook_dispatcher: Arc<D>,
-}
+**POST /jobs - Job Creation:**
 
-impl<T: Repository, D: WebhookDispatcher + 'static> UseCaseName<T, D> {
-    pub fn new(repository: Arc<T>, webhook_dispatcher: Arc<D>) -> Self {
-        Self { repository, webhook_dispatcher }
-    }
-
-    pub async fn execute(&self, /* params */) -> Result<Response, DomainError> {
-        // Business logic...
-
-        // Async webhook dispatch
-        let webhook_event = WebhookEvent::new(event_type, payload);
-        let dispatcher = Arc::clone(&self.webhook_dispatcher);
-        tokio::spawn(async move {
-            if let Err(e) = dispatcher.dispatch_event(&webhook_event).await {
-                eprintln!("Failed to dispatch webhook: {:?}", e);
-            }
-        });
-
-        Ok(response)
-    }
-}
+```bash
+curl -X POST http://localhost:8080/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"type": "test_job", "payload": {"key": "value"}}'
 ```
 
-**AppState Integration:**
-```rust
-// main.rs - All webhook use cases properly configured:
-pub ship_sales_order_use_case: Arc<ShipSalesOrderUseCase<..., WebhookDispatcherImpl<...>>>
-pub receive_transfer_use_case: Arc<ReceiveTransferUseCase<..., WebhookDispatcherImpl<...>>>
-pub ship_transfer_use_case: Arc<ShipTransferUseCase<..., WebhookDispatcherImpl<...>>>
-pub create_return_use_case: Arc<CreateReturnUseCase<..., WebhookDispatcherImpl<...>>>
-```
+**Response:**
 
-**Webhook Event Coverage:**
-- **Creation Events:** `PurchaseOrderCreated`, `SalesOrderCreated`, `TransferCreated`, `ReturnCreated`, `AdjustmentCreated`
-- **Update Events:** `PurchaseOrderUpdated`, `SalesOrderUpdated`, `TransferUpdated`
-- **Stock Events:** `StockMovement`
-
-#### 🧪 Testing Results - ALL ENDPOINTS VERIFIED ✅
-
-**Tested Endpoints & Results:**
-
-| Use Case | Endpoint | Event | Status | Test Data |
-|----------|----------|-------|--------|-----------|
-| CreateReturnUseCase | `POST /returns` | `ReturnCreated` | ✅ PASS | Return `RT-5345fe8a...` (2 units) |
-| ShipSalesOrderUseCase | `POST /sales_orders/{id}/ship` | `SalesOrderUpdated` | ✅ PASS | SO `SO-2a1a96ba...` → `Shipped` |
-| ShipTransferUseCase | `POST /transfers/{id}/ship` | `TransferUpdated` | ✅ PASS | Transfer `TR-e04f79a2...` → `InTransit` |
-| ReceiveTransferUseCase | `POST /transfers/{id}/receive` | `TransferUpdated` | ✅ PASS | Transfer `TR-e04f79a2...` → `Received` |
-| CreatePurchaseOrderUseCase | `POST /purchase_orders` | `PurchaseOrderCreated` | ✅ PASS | PO `PO-1761010746` (10 units) |
-
-**Validation Criteria Met:**
-- ✅ **Async Processing:** Operations complete without webhook delays
-- ✅ **Data Integrity:** All entities created/updated correctly
-- ✅ **Status Transitions:** Proper state changes (Draft→Open→InTransit→Received, etc.)
-- ✅ **Stock Movements:** Appropriate inventory adjustments
-- ✅ **Error Isolation:** Webhook failures don't affect business operations
-- ✅ **Compilation:** All code compiles successfully
-
-#### 📊 Webhook Payload Structure
-
-**SalesOrderUpdated Example:**
 ```json
 {
-  "sales_order": {
-    "id": "uuid",
-    "so_number": "SO-...",
-    "status": "SHIPPED",
-    "total_amount": 79.95,
-    "fulfillment_location_id": "uuid",
-    "lines": [...],
-    "updated_at": "2025-10-21T..."
-  },
-  "stock_movements": [...]
+  "job_id": "job_31c8927959d5442e90e3a6bc5a9188ec",
+  "status": "QUEUED",
+  "created_at": "2025-10-21T13:48:24.782228088Z"
 }
 ```
 
-**TransferUpdated Example:**
+**GET /jobs/{jobId} - Status Retrieval:**
+
+```bash
+curl -X GET http://localhost:8080/jobs/job_31c8927959d5442e90e3a6bc5a9188ec
+```
+
+**Response:**
+
 ```json
 {
-  "transfer": {
-    "id": "uuid",
-    "transfer_number": "TR-...",
-    "status": "RECEIVED",
-    "from_location_id": "uuid",
-    "to_location_id": "uuid",
-    "lines": [...],
-    "updated_at": "2025-10-21T..."
-  },
-  "stock_movements": [...]
+  "job_id": "job_31c8927959d5442e90e3a6bc5a9188ec",
+  "type": "test_job",
+  "status": "QUEUED",
+  "progress": 0,
+  "result_url": null,
+  "errors": null,
+  "created_at": "2025-10-21T13:48:24.782228Z",
+  "updated_at": "2025-10-21T13:48:24.782228Z",
+  "started_at": null,
+  "completed_at": null
 }
+```
+
+**Database Verification:**
+
+```sql
+SELECT job_id, tenant_id, type, status FROM jobs;
+-- job_31c8927959d5442e90e3a6bc5a9188ec | 550e8400-e29b-41d4-a716-446655440000 | test_job | QUEUED
+```
+
+#### 🔧 Technical Architecture
+
+**Job Status Lifecycle:**
+
+```rust
+pub enum JobStatus {
+    Queued,      // Initial state
+    Running,     // Processing started
+    Success,     // Completed successfully
+    Failed,      // Failed with errors
+    PartialSuccess, // Completed with some errors
+}
+```
+
+**Async Processing Pattern:**
+
+```rust
+// Job creation and immediate queuing
+let job = Job::new(tenant_id, job_type, Some(payload))?;
+job_service.enqueue_job(job).await?;
+
+// Worker framework ready for background processing
+let worker = WorkerManager::new(job_service, job_processor);
+worker.run().await; // Processes jobs asynchronously
+```
+
+**Database Schema:**
+
+```sql
+CREATE TABLE jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id VARCHAR(255) NOT NULL UNIQUE,
+    tenant_id UUID NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'QUEUED',
+    progress INTEGER NOT NULL DEFAULT 0,
+    payload JSONB,
+    result_url VARCHAR(500),
+    errors JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
 ```
 
 #### 🚀 Production Readiness
 
 **System Characteristics:**
-- **Performance:** Webhooks dispatched asynchronously, zero impact on business operations
-- **Reliability:** Failed webhooks logged but don't fail operations
-- **Scalability:** Event-driven architecture ready for high-volume operations
-- **Maintainability:** Consistent patterns across all use cases
-- **Observability:** Comprehensive logging for webhook dispatch attempts
+- **Performance:** Async job processing with tokio runtime
+- **Reliability:** Database persistence with transaction safety
+- **Scalability:** Worker framework ready for horizontal scaling
+- **Observability:** Comprehensive job status tracking and progress monitoring
+- **Error Handling:** Structured error storage with partial success support
 
-**Infrastructure Components:**
-- **WebhookDispatcher:** Trait-based dispatcher with PostgreSQL storage
-- **WebhookEvent:** Structured event entities with JSON payloads
-- **Async Processing:** Tokio-based non-blocking webhook delivery
-- **Error Handling:** Graceful failure handling with retry capabilities
+**Ready for Extensions:**
+- **Bulk Operations:** Large data imports/exports
+- **Report Generation:** Background report processing
+- **Data Synchronization:** Cross-system data sync jobs
+- **Scheduled Tasks:** Cron-like job scheduling
 
-#### 📈 Sprint 4 Success Metrics
+### ⏳ TASK-026: Exports Endpoints
+**Status:** 🔄 **PENDING**
 
-| Metric | Target | Achieved | Status |
-|--------|--------|----------|--------|
-| Webhook-integrated use cases | 4 | 4 | ✅ COMPLETE |
-| Endpoint testing coverage | 100% | 100 | ✅ COMPLETE |
-| Async webhook dispatching | All | All | ✅ COMPLETE |
-| Business logic isolation | 100% | 100 | ✅ COMPLETE |
-| Compilation success | 100% | 100 | ✅ COMPLETE |
+Implement Exports endpoints for generating and downloading data exports in various formats.
 
-#### 📋 Files Modified
+### ⏳ TASK-027: Webhook Management
+**Status:** 🔄 **PENDING**
 
-**Use Case Files:**
-- `src/application/use_cases/ship_sales_order.rs`
-- `src/application/use_cases/receive_transfer.rs`
-- `src/application/use_cases/ship_transfer.rs`
-- `src/application/use_cases/create_return.rs`
-
-**Handler Files:**
-- `src/presentation/handlers/transfer.rs`
-- `src/presentation/handlers/returns.rs`
-
-**Configuration Files:**
-- `src/main.rs` (AppState updates)
-
-#### 🔮 Future Enhancements
-
-**Phase 1 - Reliability**
-- Background job processing for webhook delivery
-- Retry logic with exponential backoff
-- Dead letter queue for failed webhooks
-
-**Phase 2 - Security**
-- HMAC signature verification for webhook payloads
-- Webhook authentication and authorization
-- Rate limiting and abuse protection
-
-**Phase 3 - Management**
-- Webhook management UI
-- Delivery analytics and monitoring
-- Webhook testing tools
-
-**Phase 4 - Advanced Features**
-- Webhook filtering and transformation
-- Custom webhook schemas
-- Event replay capabilities
+Implement Webhook management endpoints for CRUD operations on webhook configurations.
 
 ---
 
