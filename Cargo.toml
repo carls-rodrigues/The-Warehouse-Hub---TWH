@@ -36,3 +36,4 @@ opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic", "metrics"] }
 opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
 opentelemetry-semantic-conventions = "0.16"
 tracing-opentelemetry = "0.25"
+prometheus = "0.14.0"

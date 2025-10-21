@@ -1,6 +1,7 @@
 // Presentation layer routes
 pub mod admin;
 pub mod jobs;
+pub mod metrics;
 pub mod purchase_order;
 pub mod reports;
 pub mod returns;
@@ -13,6 +14,7 @@ pub mod webhook;
 
 pub use admin::create_admin_router;
 pub use jobs::create_jobs_routes;
+pub use metrics::create_metrics_router;
 pub use purchase_order::create_purchase_order_routes;
 pub use reports::create_reports_routes;
 pub use returns::return_routes;

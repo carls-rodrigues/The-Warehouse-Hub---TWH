@@ -54,8 +54,8 @@ use crate::infrastructure::services::{
     job_service_impl::JobServiceImpl, report_service_impl::ReportServiceImpl,
 };
 use crate::presentation::routes::{
-    create_admin_router, create_jobs_routes, create_purchase_order_routes, create_reports_routes,
-    create_stock_routes, create_webhook_routes, returns::return_routes,
+    create_admin_router, create_jobs_routes, create_metrics_router, create_purchase_order_routes,
+    create_reports_routes, create_stock_routes, create_webhook_routes, returns::return_routes,
     sales_order::sales_order_routes, search::create_search_routes, tenant::tenant_routes,
     transfer::transfer_routes,
 };
@@ -577,6 +577,7 @@ async fn main() {
         .merge(create_webhook_routes())
         .merge(tenant_routes())
         .merge(create_admin_router())
+        .merge(create_metrics_router())
         .merge(export_routes::create_exports_router())
         .layer(axum::middleware::from_fn(
             tracing_middleware::tracing_middleware,
