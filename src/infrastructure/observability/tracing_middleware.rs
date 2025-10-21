@@ -5,9 +5,6 @@ use axum::{
 };
 use opentelemetry::trace::{SpanKind, Status, TraceContextExt, Tracer};
 use opentelemetry::{global, KeyValue};
-use opentelemetry_semantic_conventions::attribute::{
-    HTTP_METHOD, HTTP_STATUS_CODE, HTTP_URL, NETWORK_TRANSPORT,
-};
 use std::time::Instant;
 
 use crate::infrastructure::observability::metrics::AppMetrics;

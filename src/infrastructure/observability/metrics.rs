@@ -33,49 +33,41 @@ impl AppMetrics {
         let http_requests_total = meter
             .u64_counter("http_requests_total")
             .with_description("Total number of HTTP requests")
-            .with_unit("requests")
             .init();
 
         let http_request_duration = meter
             .f64_histogram("http_request_duration_seconds")
             .with_description("HTTP request duration in seconds")
-            .with_unit("s")
             .init();
 
         let db_queries_total = meter
             .u64_counter("db_queries_total")
             .with_description("Total number of database queries")
-            .with_unit("queries")
             .init();
 
         let db_query_duration = meter
             .f64_histogram("db_query_duration_seconds")
             .with_description("Database query duration in seconds")
-            .with_unit("s")
             .init();
 
         let db_connections_active = meter
             .u64_observable_gauge("db_connections_active")
             .with_description("Number of active database connections")
-            .with_unit("connections")
             .init();
 
         let rate_limit_hits_total = meter
             .u64_counter("rate_limit_hits_total")
             .with_description("Total number of rate limit hits")
-            .with_unit("hits")
             .init();
 
         let webhook_deliveries_total = meter
             .u64_counter("webhook_deliveries_total")
             .with_description("Total number of webhook delivery attempts")
-            .with_unit("deliveries")
             .init();
 
         let jobs_processed_total = meter
             .u64_counter("jobs_processed_total")
             .with_description("Total number of jobs processed")
-            .with_unit("jobs")
             .init();
 
         let metrics = Self {

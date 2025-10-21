@@ -4,12 +4,17 @@ pub mod tracing_middleware;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::BatchSpanProcessor;
 use opentelemetry_sdk::Resource;
+use prometheus::Registry;
 use std::env;
+use std::sync::Arc;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Global Prometheus registry for metrics exposition
+static PROMETHEUS_REGISTRY: std::sync::OnceLock<Arc<Registry>> = std::sync::OnceLock::new();
 
 /// Initialize OpenTelemetry tracing and metrics
 pub fn init_observability() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -40,24 +45,15 @@ pub fn init_observability() -> Result<(), Box<dyn std::error::Error + Send + Syn
     global::set_tracer_provider(tracer_provider.clone());
 
     // Initialize metrics
+    let registry = Registry::new();
+    let prometheus_exporter = opentelemetry_prometheus::exporter()
+        .with_registry(registry.clone())
+        .build()?;
+
+    PROMETHEUS_REGISTRY.set(Arc::new(registry)).unwrap();
+
     let meter_provider = SdkMeterProvider::builder()
-        .with_reader(
-            PeriodicReader::builder(
-                opentelemetry_otlp::new_exporter()
-                    .tonic()
-                    .with_endpoint(otlp_endpoint)
-                    .build_metrics_exporter(
-                        Box::new(
-                            opentelemetry_sdk::metrics::reader::DefaultAggregationSelector::new(),
-                        ),
-                        Box::new(
-                            opentelemetry_sdk::metrics::reader::DefaultTemporalitySelector::new(),
-                        ),
-                    )?,
-                opentelemetry_sdk::runtime::Tokio,
-            )
-            .build(),
-        )
+        .with_reader(prometheus_exporter)
         .build();
 
     global::set_meter_provider(meter_provider);
@@ -82,8 +78,11 @@ pub fn init_observability() -> Result<(), Box<dyn std::error::Error + Send + Syn
     Ok(())
 }
 
-/// Shutdown OpenTelemetry gracefully
-pub fn shutdown_observability() {
-    tracing::info!("Shutting down OpenTelemetry");
-    global::shutdown_tracer_provider();
+/// Get the global Prometheus registry
+pub fn get_prometheus_registry() -> Arc<Registry> {
+    Arc::clone(
+        PROMETHEUS_REGISTRY
+            .get()
+            .expect("Prometheus registry not initialized"),
+    )
 }

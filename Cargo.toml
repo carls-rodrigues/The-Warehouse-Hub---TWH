@@ -34,6 +34,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 opentelemetry = "0.24"
 opentelemetry-otlp = { version = "0.17", features = ["grpc-tonic", "metrics"] }
 opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
-opentelemetry-semantic-conventions = "0.16"
 tracing-opentelemetry = "0.25"
-prometheus = "0.14.0"
+prometheus = "0.13.0"
+opentelemetry-prometheus = "0.17"

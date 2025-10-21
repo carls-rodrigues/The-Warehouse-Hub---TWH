@@ -1,6 +1,7 @@
 use axum::{routing::get, Router};
 use prometheus::{Encoder, TextEncoder};
 
+use crate::infrastructure::observability::get_prometheus_registry;
 use crate::AppState;
 
 /// Create the metrics router
@@ -10,16 +11,11 @@ pub fn create_metrics_router() -> Router<AppState> {
 
 /// Handler for the /metrics endpoint
 async fn metrics_handler() -> String {
-    // Gather metrics from the default registry
-    let metric_families = prometheus::gather();
-
-    // Encode metrics to Prometheus text format
+    let registry = get_prometheus_registry();
     let encoder = TextEncoder::new();
+    let metric_families = registry.gather();
     let mut buffer = Vec::new();
-
     encoder.encode(&metric_families, &mut buffer).unwrap();
-
-    // Convert to string and return
     String::from_utf8(buffer).unwrap()
 }
 
