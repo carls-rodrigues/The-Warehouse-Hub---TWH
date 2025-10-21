@@ -1487,7 +1487,7 @@ paths:
                 csv:
                   value: "sku,name,location,qty_on_hand\nABC-123,Acme Hammer,Main Warehouse,100\n"
 
-  /webhooks/register:
+  /webhooks:
     post:
       summary: Register webhook subscription (server will sign deliveries with HMAC)
       tags: [Webhooks]
@@ -1501,17 +1501,23 @@ paths:
           application/json:
             schema:
               type: object
-              required: [url, events]
+              required: [url, secret, events]
               properties:
-                url: { type: string, format: uri }
+                url: { type: string, format: uri, description: "Webhook endpoint URL" }
+                secret:
+                  type: string
+                  minLength: 32
+                  description: "Secret key for HMAC signing (minimum 32 characters)"
                 events:
                   type: array
                   items:
                     type: string
-                    enum: [order.created, order.shipped, po.received, stock.low, stock.changed]
-                secret:
-                  type: string
-                  description: Optional secret used to sign payloads; if not provided server generates one
+                    enum: [STOCK_MOVEMENT, PURCHASE_ORDER_CREATED, PURCHASE_ORDER_UPDATED, SALES_ORDER_CREATED, SALES_ORDER_UPDATED, TRANSFER_CREATED, TRANSFER_UPDATED, RETURN_CREATED, RETURN_UPDATED, ADJUSTMENT_CREATED]
+                  description: "List of events to subscribe to"
+                active:
+                  type: boolean
+                  default: true
+                  description: "Whether the webhook is active"
       responses:
         '201':
           description: webhook subscription created
@@ -1525,56 +1531,92 @@ paths:
                   events:
                     type: array
                     items: { type: string }
-                  secret:
-                    type: string
-                    description: Returned only on creation; store securely
+                  status: { type: string, enum: [ACTIVE, INACTIVE, FAILED] }
+                  name: { type: string, nullable: true }
+                  created_at: { $ref: '#/components/schemas/Timestamp' }
+                  updated_at: { $ref: '#/components/schemas/Timestamp' }
         '400':
-          description: invalid
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthorized
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /webhooks/deliveries:
     get:
-      summary: List webhook deliveries and failures (admin)
+      summary: List user webhooks
       tags: [Webhooks]
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/tenant'
-        - $ref: '#/components/parameters/page'
-        - $ref: '#/components/parameters/per_page'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
       responses:
         '200':
-          description: deliveries
+          description: list of webhooks
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
+                  webhooks:
                     type: array
                     items:
                       type: object
                       properties:
                         id: { $ref: '#/components/schemas/UUID' }
-                        subscription_id: { $ref: '#/components/schemas/UUID' }
-                        status: { type: string }
-                        http_status: { type: integer }
-                        attempts: { type: integer }
-                        last_attempt_at: { $ref: '#/components/schemas/Timestamp' }
-                  meta:
-                    $ref: '#/components/schemas/PagingMeta'
+                        url: { type: string }
+                        events:
+                          type: array
+                          items: { type: string }
+                        status: { type: string, enum: [ACTIVE, INACTIVE, FAILED] }
+                        name: { type: string, nullable: true }
+                        created_at: { $ref: '#/components/schemas/Timestamp' }
+                        updated_at: { $ref: '#/components/schemas/Timestamp' }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total_count: { type: integer }
+                      total_pages: { type: integer }
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /webhooks/test:
-    post:
-      summary: Test webhook delivery endpoint for admins (queues test delivery)
+  /webhooks/{webhook_id}:
+    put:
+      summary: Update webhook subscription
       tags: [Webhooks]
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/tenant'
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
       requestBody:
         required: true
         content:
@@ -1582,17 +1624,311 @@ paths:
             schema:
               type: object
               properties:
-                subscription_id: { $ref: '#/components/schemas/UUID' }
-                event: { type: string }
+                url: { type: string, format: uri }
+                secret: { type: string, minLength: 32 }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [STOCK_MOVEMENT, PURCHASE_ORDER_CREATED, PURCHASE_ORDER_UPDATED, SALES_ORDER_CREATED, SALES_ORDER_UPDATED, TRANSFER_CREATED, TRANSFER_UPDATED, RETURN_CREATED, RETURN_UPDATED, ADJUSTMENT_CREATED]
+                status: { type: string, enum: [ACTIVE, INACTIVE, FAILED] }
       responses:
-        '202':
-          description: test queued
+        '200':
+          description: webhook updated
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  queued: { type: boolean }
+                  id: { $ref: '#/components/schemas/UUID' }
+                  url: { type: string }
+                  events:
+                    type: array
+                    items: { type: string }
+                  status: { type: string, enum: [ACTIVE, INACTIVE, FAILED] }
+                  name: { type: string, nullable: true }
+                  created_at: { $ref: '#/components/schemas/Timestamp' }
+                  updated_at: { $ref: '#/components/schemas/Timestamp' }
+        '400':
+          description: invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete webhook subscription
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
+      responses:
+        '204':
+          description: webhook deleted
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhooks/{webhook_id}/deliveries:
+    get:
+      summary: List webhook deliveries for a specific webhook
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: list of webhook deliveries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { $ref: '#/components/schemas/UUID' }
+                        webhook_id: { $ref: '#/components/schemas/UUID' }
+                        event_id: { $ref: '#/components/schemas/UUID' }
+                        status: { type: string, enum: [PENDING, SUCCESS, FAILED, TIMEOUT, DLQ] }
+                        attempt_count: { type: integer }
+                        last_attempt_at: { $ref: '#/components/schemas/Timestamp', nullable: true }
+                        next_attempt_at: { $ref: '#/components/schemas/Timestamp', nullable: true }
+                        response_status: { type: integer, nullable: true }
+                        response_body: { type: string, nullable: true }
+                        error_message: { type: string, nullable: true }
+                        created_at: { $ref: '#/components/schemas/Timestamp' }
+                        updated_at: { $ref: '#/components/schemas/Timestamp' }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total_count: { type: integer }
+                      total_pages: { type: integer }
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - can only view deliveries for own webhooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhooks/deliveries/{delivery_id}:
+    get:
+      summary: Get detailed information about a specific webhook delivery
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: delivery_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
+      responses:
+        '200':
+          description: webhook delivery details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delivery:
+                    type: object
+                    properties:
+                      id: { $ref: '#/components/schemas/UUID' }
+                      webhook_id: { $ref: '#/components/schemas/UUID' }
+                      event_id: { $ref: '#/components/schemas/UUID' }
+                      status: { type: string, enum: [PENDING, SUCCESS, FAILED, TIMEOUT, DLQ] }
+                      attempt_count: { type: integer }
+                      last_attempt_at: { $ref: '#/components/schemas/Timestamp', nullable: true }
+                      next_attempt_at: { $ref: '#/components/schemas/Timestamp', nullable: true }
+                      response_status: { type: integer, nullable: true }
+                      response_body: { type: string, nullable: true }
+                      error_message: { type: string, nullable: true }
+                      created_at: { $ref: '#/components/schemas/Timestamp' }
+                      updated_at: { $ref: '#/components/schemas/Timestamp' }
+                  event:
+                    type: object
+                    properties:
+                      id: { $ref: '#/components/schemas/UUID' }
+                      event_type: { type: string, enum: [STOCK_MOVEMENT, PURCHASE_ORDER_CREATED, PURCHASE_ORDER_UPDATED, SALES_ORDER_CREATED, SALES_ORDER_UPDATED, TRANSFER_CREATED, TRANSFER_UPDATED, RETURN_CREATED, RETURN_UPDATED, ADJUSTMENT_CREATED] }
+                      payload: { type: object }
+                      created_at: { $ref: '#/components/schemas/Timestamp' }
+                  webhook_url: { type: string }
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - can only view deliveries for own webhooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: delivery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhooks/{webhook_id}/test:
+    post:
+      summary: Test webhook delivery by sending a test event
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
+      responses:
+        '200':
+          description: test delivery result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  delivery_id: { $ref: '#/components/schemas/UUID', nullable: true }
+                  response_status: { type: integer, nullable: true }
+                  response_body: { type: string, nullable: true }
+                  error_message: { type: string, nullable: true }
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - can only test own webhooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /webhooks/deliveries/{delivery_id}/retry:
+    post:
+      summary: Retry a failed webhook delivery
+      tags: [Webhooks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/tenant'
+        - name: delivery_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/UUID'
+      responses:
+        '200':
+          description: retry initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+        '400':
+          description: invalid request (e.g., delivery cannot be retried)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: forbidden - can only retry deliveries for own webhooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: delivery not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /jobs:
     post:
