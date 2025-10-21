@@ -45,7 +45,7 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ### Admin and DevEx Tasks (Sprint 5)
 
-- **TASK-002**: Sandbox tenant provisioning and quickstart flow (24h, P0)
+- **TASK-002** [COMPLETED]: Sandbox tenant provisioning and quickstart flow (24h, P0) - Core implementation done with API endpoint, sample data population, and testing; remaining: cleanup job, OpenAPI updates, quickstart integration
 - **TASK-012**: Admin UI: DLQ replay, sandbox management and billing view (40h, P1)
 - **TASK-016**: Create Node and Python SDKs and publish quickstarts (32h, P0)
 - **TASK-018**: Generate Postman collection from canonical OpenAPI and publish (8h, P0)
