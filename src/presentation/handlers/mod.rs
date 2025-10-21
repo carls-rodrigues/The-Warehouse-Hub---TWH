@@ -5,3 +5,4 @@ pub mod sales_order;
 pub mod search;
 pub mod stock;
 pub mod transfer;
+pub mod webhook;

@@ -1,8 +1,12 @@
 use crate::domain::entities::sales_order::{SalesOrder, SalesOrderLine};
+use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::sales_order_repository::SalesOrderRepository;
+use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -26,13 +30,17 @@ pub struct CreateSalesOrderResponse {
     pub stock_movements: Option<Vec<crate::domain::entities::sales_order::StockMovement>>,
 }
 
-pub struct CreateSalesOrderUseCase<T: SalesOrderRepository> {
-    sales_order_repo: T,
+pub struct CreateSalesOrderUseCase<T: SalesOrderRepository, D: WebhookDispatcher + 'static> {
+    sales_order_repo: Arc<T>,
+    webhook_dispatcher: Arc<D>,
 }
 
-impl<T: SalesOrderRepository> CreateSalesOrderUseCase<T> {
-    pub fn new(sales_order_repo: T) -> Self {
-        Self { sales_order_repo }
+impl<T: SalesOrderRepository, D: WebhookDispatcher + 'static> CreateSalesOrderUseCase<T, D> {
+    pub fn new(sales_order_repo: Arc<T>, webhook_dispatcher: Arc<D>) -> Self {
+        Self {
+            sales_order_repo,
+            webhook_dispatcher,
+        }
     }
 
     pub async fn execute(
@@ -80,6 +88,46 @@ impl<T: SalesOrderRepository> CreateSalesOrderUseCase<T> {
         } else {
             None
         };
+
+        // Dispatch webhook event (non-blocking)
+        let webhook_event = WebhookEvent::new(
+            WebhookEventType::SalesOrderCreated,
+            json!({
+                "sales_order": {
+                    "id": sales_order.id,
+                    "so_number": sales_order.so_number,
+                    "customer_id": sales_order.customer_id,
+                    "status": match sales_order.status {
+                        crate::domain::entities::sales_order::SalesOrderStatus::Draft => "DRAFT",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Confirmed => "CONFIRMED",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Picking => "PICKING",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Shipped => "SHIPPED",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Invoiced => "INVOICED",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Cancelled => "CANCELLED",
+                        crate::domain::entities::sales_order::SalesOrderStatus::Returned => "RETURNED",
+                    },
+                    "total_amount": sales_order.total_amount,
+                    "fulfillment_location_id": sales_order.fulfillment_location_id,
+                    "created_at": sales_order.created_at,
+                    "lines": sales_order.lines.iter().map(|line| json!({
+                        "id": line.id,
+                        "item_id": line.item_id,
+                        "qty": line.qty,
+                        "unit_price": line.unit_price,
+                        "tax": line.tax,
+                        "reserved": line.reserved
+                    })).collect::<Vec<_>>()
+                }
+            }),
+        );
+
+        // Spawn a task to dispatch the webhook asynchronously
+        let dispatcher = Arc::clone(&self.webhook_dispatcher);
+        tokio::spawn(async move {
+            if let Err(e) = dispatcher.dispatch_event(&webhook_event).await {
+                eprintln!("Failed to dispatch sales order created webhook: {:?}", e);
+            }
+        });
 
         Ok(CreateSalesOrderResponse {
             sales_order,

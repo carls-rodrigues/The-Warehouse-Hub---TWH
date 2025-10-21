@@ -19,13 +19,14 @@ pub async fn create_return(
     State(state): State<AppState>,
     Json(request): Json<crate::domain::entities::returns::CreateReturnRequest>,
 ) -> Result<Json<CreateReturnResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let repo = Arc::new(PostgresReturnRepository::new(Arc::clone(&state.pool)));
-    let use_case = CreateReturnUseCase::new(repo);
-
     // TODO: Get user ID from authentication context
     let created_by = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(); // Use existing test user
 
-    match use_case.execute(request, created_by).await {
+    match state
+        .create_return_use_case
+        .execute(request, created_by)
+        .await
+    {
         Ok(response) => Ok(Json(response)),
         Err(DomainError::ValidationError(msg)) => {
             Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))

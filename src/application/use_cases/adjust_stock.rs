@@ -2,7 +2,9 @@ use crate::domain::entities::inventory::{
     Adjustment, AdjustmentReason, MovementType, ReferenceType, StockAdjustmentRequest,
     StockMovement,
 };
+use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::stock_repository::StockRepository;
+use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -14,13 +16,17 @@ pub struct AdjustStockResponse {
     pub new_quantity_on_hand: i32,
 }
 
-pub struct AdjustStockUseCase<R: StockRepository> {
+pub struct AdjustStockUseCase<R: StockRepository, D: WebhookDispatcher> {
     stock_repository: Arc<R>,
+    webhook_dispatcher: Arc<D>,
 }
 
-impl<R: StockRepository> AdjustStockUseCase<R> {
-    pub fn new(stock_repository: Arc<R>) -> Self {
-        Self { stock_repository }
+impl<R: StockRepository, D: WebhookDispatcher> AdjustStockUseCase<R, D> {
+    pub fn new(stock_repository: Arc<R>, webhook_dispatcher: Arc<D>) -> Self {
+        Self {
+            stock_repository,
+            webhook_dispatcher,
+        }
     }
 
     pub async fn execute(
@@ -62,6 +68,27 @@ impl<R: StockRepository> AdjustStockUseCase<R> {
             created_by,
             created_at: movement.created_at,
         };
+
+        // Trigger webhook event for stock adjustment
+        let webhook_payload = serde_json::json!({
+            "event_type": "stock_adjustment",
+            "adjustment": {
+                "id": adjustment.id,
+                "item_id": adjustment.item_id,
+                "location_id": adjustment.location_id,
+                "qty_change": adjustment.qty_change,
+                "reason": adjustment.reason,
+                "note": adjustment.note,
+                "created_by": adjustment.created_by,
+                "created_at": adjustment.created_at,
+                "new_quantity_on_hand": stock_level.quantity_on_hand
+            }
+        });
+
+        let webhook_event = WebhookEvent::new(WebhookEventType::StockMovement, webhook_payload);
+
+        // Note: We don't fail the stock adjustment if webhook dispatch fails
+        let _ = self.webhook_dispatcher.dispatch_event(&webhook_event).await;
 
         Ok(AdjustStockResponse {
             adjustment,

@@ -1,8 +1,11 @@
 use crate::domain::entities::returns::{CreateReturnRequest, Return, ReturnLine};
+use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::return_repository::ReturnRepository;
+use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -11,13 +14,17 @@ pub struct CreateReturnResponse {
     pub return_entity: Return,
 }
 
-pub struct CreateReturnUseCase<R: ReturnRepository> {
+pub struct CreateReturnUseCase<R: ReturnRepository, D: WebhookDispatcher + 'static> {
     return_repository: Arc<R>,
+    webhook_dispatcher: Arc<D>,
 }
 
-impl<R: ReturnRepository> CreateReturnUseCase<R> {
-    pub fn new(return_repository: Arc<R>) -> Self {
-        Self { return_repository }
+impl<R: ReturnRepository, D: WebhookDispatcher + 'static> CreateReturnUseCase<R, D> {
+    pub fn new(return_repository: Arc<R>, webhook_dispatcher: Arc<D>) -> Self {
+        Self {
+            return_repository,
+            webhook_dispatcher,
+        }
     }
 
     pub async fn execute(
@@ -60,6 +67,44 @@ impl<R: ReturnRepository> CreateReturnUseCase<R> {
 
         // Create in repository
         self.return_repository.create(&return_entity).await?;
+
+        // Dispatch webhook event (non-blocking)
+        let webhook_event = WebhookEvent::new(
+            WebhookEventType::ReturnCreated,
+            json!({
+                "return": {
+                    "id": return_entity.id,
+                    "return_number": return_entity.return_number,
+                    "customer_id": return_entity.customer_id,
+                    "location_id": return_entity.location_id,
+                    "status": match return_entity.status {
+                        crate::domain::entities::returns::ReturnStatus::Draft => "DRAFT",
+                        crate::domain::entities::returns::ReturnStatus::Open => "OPEN",
+                        crate::domain::entities::returns::ReturnStatus::Received => "RECEIVED",
+                        crate::domain::entities::returns::ReturnStatus::Cancelled => "CANCELLED",
+                    },
+                    "total_quantity": return_entity.total_quantity,
+                    "notes": return_entity.notes,
+                    "created_at": return_entity.created_at,
+                    "lines": return_entity.lines.iter().map(|line| json!({
+                        "id": line.id,
+                        "item_id": line.item_id,
+                        "quantity": line.quantity,
+                        "quantity_received": line.quantity_received,
+                        "unit_price": line.unit_price,
+                        "reason": line.reason
+                    })).collect::<Vec<_>>()
+                }
+            }),
+        );
+
+        // Spawn a task to dispatch the webhook asynchronously
+        let dispatcher = Arc::clone(&self.webhook_dispatcher);
+        tokio::spawn(async move {
+            if let Err(e) = dispatcher.dispatch_event(&webhook_event).await {
+                eprintln!("Failed to dispatch return created webhook: {:?}", e);
+            }
+        });
 
         Ok(CreateReturnResponse { return_entity })
     }

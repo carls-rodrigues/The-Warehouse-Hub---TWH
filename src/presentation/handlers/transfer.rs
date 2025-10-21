@@ -23,13 +23,14 @@ pub async fn create_transfer(
     State(state): State<AppState>,
     Json(request): Json<crate::domain::entities::transfer::CreateTransferRequest>,
 ) -> Result<Json<CreateTransferResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let repo = PostgresTransferRepository::new(Arc::clone(&state.pool));
-    let use_case = CreateTransferUseCase::new(repo);
-
     // TODO: Get user ID from authentication context
     let created_by = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(); // Use existing test user
 
-    match use_case.execute(request, created_by).await {
+    match state
+        .create_transfer_use_case
+        .execute(request, created_by)
+        .await
+    {
         Ok(response) => Ok(Json(response)),
         Err(DomainError::ValidationError(msg)) => {
             Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))
@@ -70,13 +71,14 @@ pub async fn ship_transfer(
     State(state): State<AppState>,
     Path(transfer_id): Path<Uuid>,
 ) -> Result<Json<ShipTransferResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let repo = PostgresTransferRepository::new(Arc::clone(&state.pool));
-    let use_case = ShipTransferUseCase::new(repo);
-
     // TODO: Get user ID from authentication context
     let shipped_by = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(); // Use existing test user
 
-    match use_case.execute(transfer_id, shipped_by).await {
+    match state
+        .ship_transfer_use_case
+        .execute(transfer_id, shipped_by)
+        .await
+    {
         Ok(response) => Ok(Json(response)),
         Err(DomainError::ValidationError(msg)) => {
             Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))
@@ -99,13 +101,14 @@ pub async fn receive_transfer(
     Path(transfer_id): Path<Uuid>,
     Json(request): Json<ReceiveTransferRequest>,
 ) -> Result<Json<ReceiveTransferResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let repo = PostgresTransferRepository::new(Arc::clone(&state.pool));
-    let use_case = ReceiveTransferUseCase::new(repo);
-
     // TODO: Get user ID from authentication context
     let received_by = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(); // Use existing test user
 
-    match use_case.execute(transfer_id, request, received_by).await {
+    match state
+        .receive_transfer_use_case
+        .execute(transfer_id, request, received_by)
+        .await
+    {
         Ok(response) => Ok(Json(response)),
         Err(DomainError::ValidationError(msg)) => {
             Err((StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))))

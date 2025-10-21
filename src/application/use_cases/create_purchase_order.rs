@@ -1,9 +1,12 @@
 use crate::domain::entities::purchase_order::{
     CreatePurchaseOrderLine, CreatePurchaseOrderRequest, PurchaseOrder,
 };
+use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::purchase_order_repository::PurchaseOrderRepository;
+use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -35,14 +38,16 @@ pub struct PurchaseOrderLineResponse {
     pub line_total: f64,
 }
 
-pub struct CreatePurchaseOrderUseCase<R: PurchaseOrderRepository> {
+pub struct CreatePurchaseOrderUseCase<R: PurchaseOrderRepository, D: WebhookDispatcher + 'static> {
     purchase_order_repository: Arc<R>,
+    webhook_dispatcher: Arc<D>,
 }
 
-impl<R: PurchaseOrderRepository> CreatePurchaseOrderUseCase<R> {
-    pub fn new(purchase_order_repository: Arc<R>) -> Self {
+impl<R: PurchaseOrderRepository, D: WebhookDispatcher + 'static> CreatePurchaseOrderUseCase<R, D> {
+    pub fn new(purchase_order_repository: Arc<R>, webhook_dispatcher: Arc<D>) -> Self {
         Self {
             purchase_order_repository,
+            webhook_dispatcher,
         }
     }
 
@@ -61,6 +66,45 @@ impl<R: PurchaseOrderRepository> CreatePurchaseOrderUseCase<R> {
 
         // Save to repository
         self.purchase_order_repository.save(&po).await?;
+
+        // Dispatch webhook event (non-blocking)
+        let webhook_event = WebhookEvent::new(
+            WebhookEventType::PurchaseOrderCreated,
+            json!({
+                "purchase_order": {
+                    "id": po.id,
+                    "po_number": po.po_number,
+                    "supplier_id": po.supplier_id,
+                    "status": match po.status {
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::Draft => "DRAFT",
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::Open => "OPEN",
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::Receiving => "RECEIVING",
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::PartialReceived => "PARTIAL_RECEIVED",
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::Received => "RECEIVED",
+                        crate::domain::entities::purchase_order::PurchaseOrderStatus::Cancelled => "CANCELLED",
+                    },
+                    "total_amount": po.total_amount,
+                    "expected_date": po.expected_date,
+                    "created_at": po.created_at,
+                    "lines": po.lines.iter().map(|line| json!({
+                        "id": line.id,
+                        "item_id": line.item_id,
+                        "qty_ordered": line.qty_ordered,
+                        "qty_received": line.qty_received,
+                        "unit_cost": line.unit_cost,
+                        "line_total": line.line_total
+                    })).collect::<Vec<_>>()
+                }
+            }),
+        );
+
+        // Spawn a task to dispatch the webhook asynchronously
+        let dispatcher = Arc::clone(&self.webhook_dispatcher);
+        tokio::spawn(async move {
+            if let Err(e) = dispatcher.dispatch_event(&webhook_event).await {
+                eprintln!("Failed to dispatch purchase order created webhook: {:?}", e);
+            }
+        });
 
         // Return response
         Ok(CreatePurchaseOrderResponse {

@@ -10,4 +10,5 @@ pub mod postgres_search_repository;
 pub mod postgres_stock_repository;
 pub mod postgres_transfer_repository;
 pub mod postgres_user_repository;
+pub mod postgres_webhook_repository;
 pub mod redis_idempotency_repository;

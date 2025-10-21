@@ -371,3 +371,58 @@ CREATE INDEX IF NOT EXISTS idx_returns_created_at ON returns(created_at);
 CREATE INDEX IF NOT EXISTS idx_return_lines_return_id ON return_lines(return_id);
 CREATE INDEX IF NOT EXISTS idx_return_lines_item_id ON return_lines(item_id);
 CREATE INDEX IF NOT EXISTS idx_return_lines_created_at ON return_lines(created_at);
+
+-- Webhooks table for webhook configurations
+CREATE TABLE IF NOT EXISTS webhooks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    url VARCHAR(2048) NOT NULL,
+    secret VARCHAR(255) NOT NULL,
+    events TEXT[] NOT NULL DEFAULT '{}',
+    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'FAILED')),
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_delivery_at TIMESTAMPTZ,
+    failure_count INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0)
+);
+
+-- Create indexes for webhooks
+CREATE INDEX IF NOT EXISTS idx_webhooks_created_by ON webhooks(created_by);
+CREATE INDEX IF NOT EXISTS idx_webhooks_status ON webhooks(status);
+CREATE INDEX IF NOT EXISTS idx_webhooks_events ON webhooks USING GIN(events);
+CREATE INDEX IF NOT EXISTS idx_webhooks_created_at ON webhooks(created_at);
+
+-- Webhook events table for storing events that triggered webhooks
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for webhook events
+CREATE INDEX IF NOT EXISTS idx_webhook_events_event_type ON webhook_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
+
+-- Webhook deliveries table for tracking delivery attempts
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES webhook_events(id) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'TIMEOUT', 'DLQ')),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    last_attempt_at TIMESTAMPTZ,
+    next_attempt_at TIMESTAMPTZ,
+    response_status INTEGER,
+    response_body TEXT,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for webhook deliveries
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_event_id ON webhook_deliveries(event_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_next_attempt_at ON webhook_deliveries(next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(created_at);

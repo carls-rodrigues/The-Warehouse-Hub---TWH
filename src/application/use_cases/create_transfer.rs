@@ -1,10 +1,14 @@
 use crate::domain::entities::transfer::{
     CreateTransferRequest, StockMovement, Transfer, TransferLine,
 };
+use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::transfer_repository::TransferRepository;
+use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -12,13 +16,17 @@ pub struct CreateTransferResponse {
     pub transfer: Transfer,
 }
 
-pub struct CreateTransferUseCase<T: TransferRepository> {
-    transfer_repo: T,
+pub struct CreateTransferUseCase<T: TransferRepository, D: WebhookDispatcher + 'static> {
+    transfer_repo: Arc<T>,
+    webhook_dispatcher: Arc<D>,
 }
 
-impl<T: TransferRepository> CreateTransferUseCase<T> {
-    pub fn new(transfer_repo: T) -> Self {
-        Self { transfer_repo }
+impl<T: TransferRepository, D: WebhookDispatcher + 'static> CreateTransferUseCase<T, D> {
+    pub fn new(transfer_repo: Arc<T>, webhook_dispatcher: Arc<D>) -> Self {
+        Self {
+            transfer_repo,
+            webhook_dispatcher,
+        }
     }
 
     pub async fn execute(
@@ -58,6 +66,41 @@ impl<T: TransferRepository> CreateTransferUseCase<T> {
 
         // Create in repository
         self.transfer_repo.create(&transfer).await?;
+
+        // Dispatch webhook event (non-blocking)
+        let webhook_event = WebhookEvent::new(
+            WebhookEventType::TransferCreated,
+            json!({
+                "transfer": {
+                    "id": transfer.id,
+                    "transfer_number": transfer.transfer_number,
+                    "from_location_id": transfer.from_location_id,
+                    "to_location_id": transfer.to_location_id,
+                    "status": match transfer.status {
+                        crate::domain::entities::transfer::TransferStatus::Draft => "DRAFT",
+                        crate::domain::entities::transfer::TransferStatus::Open => "OPEN",
+                        crate::domain::entities::transfer::TransferStatus::InTransit => "IN_TRANSIT",
+                        crate::domain::entities::transfer::TransferStatus::Received => "RECEIVED",
+                        crate::domain::entities::transfer::TransferStatus::Cancelled => "CANCELLED",
+                    },
+                    "notes": transfer.notes,
+                    "created_at": transfer.created_at,
+                    "lines": transfer.lines.iter().map(|line| json!({
+                        "id": line.id,
+                        "item_id": line.item_id,
+                        "quantity": line.quantity
+                    })).collect::<Vec<_>>()
+                }
+            }),
+        );
+
+        // Spawn a task to dispatch the webhook asynchronously
+        let dispatcher = Arc::clone(&self.webhook_dispatcher);
+        tokio::spawn(async move {
+            if let Err(e) = dispatcher.dispatch_event(&webhook_event).await {
+                eprintln!("Failed to dispatch transfer created webhook: {:?}", e);
+            }
+        });
 
         Ok(CreateTransferResponse { transfer })
     }

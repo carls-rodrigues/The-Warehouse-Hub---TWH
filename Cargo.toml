@@ -26,3 +26,6 @@ jsonwebtoken = "9.0"
 dotenvy = "0.15"
 redis = { version = "0.32.3", features = ["tokio-comp"] }
 sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+reqwest = { version = "0.12", features = ["json"] }

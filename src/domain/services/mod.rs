@@ -10,3 +10,5 @@ pub mod search_repository;
 pub mod stock_repository;
 pub mod transfer_repository;
 pub mod user_repository;
+pub mod webhook_dispatcher;
+pub mod webhook_repository;

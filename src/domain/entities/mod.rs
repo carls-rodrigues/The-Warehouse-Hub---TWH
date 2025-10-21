@@ -8,3 +8,4 @@ pub mod sales_order;
 pub mod search;
 pub mod transfer;
 pub mod user;
+pub mod webhook;

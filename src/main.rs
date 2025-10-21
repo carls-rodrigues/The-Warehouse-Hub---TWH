@@ -7,7 +7,8 @@ mod shared;
 use crate::application::use_cases::{
     adjust_stock::AdjustStockUseCase, create_item::CreateItemUseCase,
     create_location::CreateLocationUseCase, create_purchase_order::CreatePurchaseOrderUseCase,
-    create_return::CreateReturnUseCase, delete_item::DeleteItemUseCase,
+    create_return::CreateReturnUseCase, create_sales_order::CreateSalesOrderUseCase,
+    create_transfer::CreateTransferUseCase, delete_item::DeleteItemUseCase,
     delete_location::DeleteLocationUseCase, get_item::GetItemUseCase,
     get_location::GetLocationUseCase, get_purchase_order::GetPurchaseOrderUseCase,
     get_return::GetReturnUseCase, get_stock_level::GetStockLevelUseCase,
@@ -15,9 +16,11 @@ use crate::application::use_cases::{
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
     list_locations::ListLocationsUseCase, login::LoginUseCase,
     process_return::ProcessReturnUseCase, receive_purchase_order::ReceivePurchaseOrderUseCase,
-    search_use_case::SearchUseCaseImpl, update_item::UpdateItemUseCase,
-    update_location::UpdateLocationUseCase,
+    receive_transfer::ReceiveTransferUseCase, search_use_case::SearchUseCaseImpl,
+    ship_sales_order::ShipSalesOrderUseCase, ship_transfer::ShipTransferUseCase,
+    update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
 };
+use crate::domain::services::webhook_dispatcher::{WebhookDispatcher, WebhookDispatcherImpl};
 use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
 };
@@ -31,10 +34,12 @@ use crate::infrastructure::repositories::{
     postgres_stock_repository::PostgresStockRepository,
     postgres_transfer_repository::PostgresTransferRepository,
     postgres_user_repository::PostgresUserRepository,
+    postgres_webhook_repository::PostgresWebhookRepository,
 };
 use crate::presentation::routes::{
-    create_purchase_order_routes, create_stock_routes, returns::return_routes,
-    sales_order::sales_order_routes, search::create_search_routes, transfer::transfer_routes,
+    create_purchase_order_routes, create_stock_routes, create_webhook_routes,
+    returns::return_routes, sales_order::sales_order_routes, search::create_search_routes,
+    transfer::transfer_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -67,14 +72,57 @@ pub struct AppState {
     pub update_location_use_case: Arc<UpdateLocationUseCase<PostgresLocationRepository>>,
     pub list_locations_use_case: Arc<ListLocationsUseCase<PostgresLocationRepository>>,
     pub delete_location_use_case: Arc<DeleteLocationUseCase<PostgresLocationRepository>>,
-    pub create_purchase_order_use_case:
-        Arc<CreatePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
+    pub create_purchase_order_use_case: Arc<
+        CreatePurchaseOrderUseCase<
+            PostgresPurchaseOrderRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
     pub get_purchase_order_use_case: Arc<GetPurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
-    pub receive_purchase_order_use_case:
-        Arc<ReceivePurchaseOrderUseCase<PostgresPurchaseOrderRepository>>,
-    pub create_return_use_case: Arc<CreateReturnUseCase<PostgresReturnRepository>>,
+    pub receive_purchase_order_use_case: Arc<
+        ReceivePurchaseOrderUseCase<
+            PostgresPurchaseOrderRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub create_return_use_case: Arc<
+        CreateReturnUseCase<
+            PostgresReturnRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
     pub get_return_use_case: Arc<GetReturnUseCase<PostgresReturnRepository>>,
     pub process_return_use_case: Arc<ProcessReturnUseCase<PostgresReturnRepository>>,
+    pub create_sales_order_use_case: Arc<
+        CreateSalesOrderUseCase<
+            PostgresSalesOrderRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub ship_sales_order_use_case: Arc<
+        ShipSalesOrderUseCase<
+            PostgresSalesOrderRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub create_transfer_use_case: Arc<
+        CreateTransferUseCase<
+            PostgresTransferRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub receive_transfer_use_case: Arc<
+        ReceiveTransferUseCase<
+            PostgresTransferRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub ship_transfer_use_case: Arc<
+        ShipTransferUseCase<
+            PostgresTransferRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
     pub search_use_case: Arc<SearchUseCaseImpl<PostgresSearchRepository>>,
     pub get_stock_level_use_case: Arc<
         GetStockLevelUseCase<
@@ -97,7 +145,14 @@ pub struct AppState {
             PostgresLocationRepository,
         >,
     >,
-    pub adjust_stock_use_case: Arc<AdjustStockUseCase<PostgresStockRepository>>,
+    pub adjust_stock_use_case: Arc<
+        AdjustStockUseCase<
+            PostgresStockRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub webhook_repository: Arc<PostgresWebhookRepository>,
+    pub webhook_dispatcher: Arc<WebhookDispatcherImpl<PostgresWebhookRepository>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -133,6 +188,9 @@ async fn main() {
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
     let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
 
+    let webhook_repository = Arc::new(PostgresWebhookRepository::new(Arc::clone(&pool)));
+    let webhook_dispatcher = Arc::new(WebhookDispatcherImpl::new(Arc::clone(&webhook_repository)));
+
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
         .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string());
@@ -163,20 +221,50 @@ async fn main() {
     let delete_location_use_case =
         Arc::new(DeleteLocationUseCase::new(Arc::clone(&location_repository)));
 
-    let create_purchase_order_use_case = Arc::new(CreatePurchaseOrderUseCase::new(Arc::clone(
-        &purchase_order_repository,
-    )));
+    let create_purchase_order_use_case = Arc::new(CreatePurchaseOrderUseCase::new(
+        Arc::clone(&purchase_order_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
     let get_purchase_order_use_case = Arc::new(GetPurchaseOrderUseCase::new(Arc::clone(
         &purchase_order_repository,
     )));
-    let receive_purchase_order_use_case = Arc::new(ReceivePurchaseOrderUseCase::new(Arc::clone(
-        &purchase_order_repository,
-    )));
+    let receive_purchase_order_use_case = Arc::new(ReceivePurchaseOrderUseCase::new(
+        Arc::clone(&purchase_order_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
 
-    let create_return_use_case = Arc::new(CreateReturnUseCase::new(Arc::clone(&return_repository)));
+    let create_return_use_case = Arc::new(CreateReturnUseCase::new(
+        Arc::clone(&return_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
     let get_return_use_case = Arc::new(GetReturnUseCase::new(Arc::clone(&return_repository)));
     let process_return_use_case =
         Arc::new(ProcessReturnUseCase::new(Arc::clone(&return_repository)));
+
+    let create_sales_order_use_case = Arc::new(CreateSalesOrderUseCase::new(
+        Arc::clone(&sales_order_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
+
+    let ship_sales_order_use_case = Arc::new(ShipSalesOrderUseCase::new(
+        Arc::clone(&sales_order_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
+
+    let create_transfer_use_case = Arc::new(CreateTransferUseCase::new(
+        Arc::clone(&transfer_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
+
+    let receive_transfer_use_case = Arc::new(ReceiveTransferUseCase::new(
+        Arc::clone(&transfer_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
+
+    let ship_transfer_use_case = Arc::new(ShipTransferUseCase::new(
+        Arc::clone(&transfer_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
 
     let search_use_case = Arc::new(SearchUseCaseImpl::new(Arc::clone(&search_repository)));
 
@@ -195,7 +283,10 @@ async fn main() {
         Arc::clone(&item_repository),
         Arc::clone(&location_repository),
     ));
-    let adjust_stock_use_case = Arc::new(AdjustStockUseCase::new(Arc::clone(&stock_repository)));
+    let adjust_stock_use_case = Arc::new(AdjustStockUseCase::new(
+        Arc::clone(&stock_repository),
+        Arc::clone(&webhook_dispatcher),
+    ));
 
     let app_state = AppState {
         pool: Arc::clone(&pool),
@@ -225,11 +316,18 @@ async fn main() {
         create_return_use_case,
         get_return_use_case,
         process_return_use_case,
+        create_sales_order_use_case,
+        ship_sales_order_use_case,
+        create_transfer_use_case,
+        receive_transfer_use_case,
+        ship_transfer_use_case,
         search_use_case,
         get_stock_level_use_case,
         list_item_stock_levels_use_case,
         get_stock_movements_use_case,
         adjust_stock_use_case,
+        webhook_repository,
+        webhook_dispatcher,
     };
 
     // Build the application with routes
@@ -252,6 +350,7 @@ async fn main() {
         .merge(sales_order_routes())
         .merge(transfer_routes())
         .merge(return_routes())
+        .merge(create_webhook_routes())
         .with_state(app_state);
 
     // Run the server
