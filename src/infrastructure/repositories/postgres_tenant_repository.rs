@@ -22,14 +22,15 @@ impl TenantRepository for PostgresTenantRepository {
         sqlx::query(
             r#"
             INSERT INTO tenants (
-                id, name, tenant_type, status, database_schema,
+                id, name, tenant_type, tier, status, database_schema,
                 created_by, expires_at, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             "#,
         )
         .bind(tenant.id)
         .bind(&tenant.name)
         .bind(tenant.tenant_type.as_str())
+        .bind(tenant.tier.as_str())
         .bind(tenant.status.as_str())
         .bind(&tenant.database_schema)
         .bind(tenant.created_by)
@@ -46,9 +47,10 @@ impl TenantRepository for PostgresTenantRepository {
     async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>, DomainError> {
         let row = sqlx::query(
             r#"
-            SELECT id, name, tenant_type, status, database_schema,
+            SELECT id, name, tenant_type, tier, status, database_schema,
                    created_by, expires_at, created_at, updated_at
-            FROM tenants WHERE id = $1
+            FROM tenants
+            WHERE id = $1
             "#,
         )
         .bind(tenant_id)
@@ -56,31 +58,32 @@ impl TenantRepository for PostgresTenantRepository {
         .await
         .map_err(|e| DomainError::DatabaseError(e.to_string()))?;
 
-        match row {
-            Some(row) => {
-                let tenant_type = TenantType::from_str(row.try_get("tenant_type")?)?;
-                let status = TenantStatus::from_str(row.try_get("status")?)?;
+        if let Some(row) = row {
+            let tenant_type = TenantType::from_str(row.try_get("tenant_type")?)?;
+            let tier = crate::domain::entities::tenant::TenantTier::from_str(row.try_get("tier")?)?;
+            let status = TenantStatus::from_str(row.try_get("status")?)?;
 
-                Ok(Some(Tenant {
-                    id: row.try_get("id")?,
-                    name: row.try_get("name")?,
-                    tenant_type,
-                    status,
-                    database_schema: row.try_get("database_schema")?,
-                    created_by: row.try_get("created_by")?,
-                    expires_at: row.try_get("expires_at")?,
-                    created_at: row.try_get("created_at")?,
-                    updated_at: row.try_get("updated_at")?,
-                }))
-            }
-            None => Ok(None),
+            Ok(Some(Tenant {
+                id: row.try_get("id")?,
+                name: row.try_get("name")?,
+                tenant_type,
+                tier,
+                status,
+                database_schema: row.try_get("database_schema")?,
+                created_by: row.try_get("created_by")?,
+                expires_at: row.try_get("expires_at")?,
+                created_at: row.try_get("created_at")?,
+                updated_at: row.try_get("updated_at")?,
+            }))
+        } else {
+            Ok(None)
         }
     }
 
     async fn list_tenants(&self) -> Result<Vec<Tenant>, DomainError> {
         let rows = sqlx::query(
             r#"
-            SELECT id, name, tenant_type, status, database_schema,
+            SELECT id, name, tenant_type, tier, status, database_schema,
                    created_by, expires_at, created_at, updated_at
             FROM tenants ORDER BY created_at DESC
             "#,
@@ -92,12 +95,14 @@ impl TenantRepository for PostgresTenantRepository {
         let mut tenants = Vec::new();
         for row in rows {
             let tenant_type = TenantType::from_str(row.try_get("tenant_type")?)?;
+            let tier = crate::domain::entities::tenant::TenantTier::from_str(row.try_get("tier")?)?;
             let status = TenantStatus::from_str(row.try_get("status")?)?;
 
             tenants.push(Tenant {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 tenant_type,
+                tier,
                 status,
                 database_schema: row.try_get("database_schema")?,
                 created_by: row.try_get("created_by")?,
@@ -146,7 +151,7 @@ impl TenantRepository for PostgresTenantRepository {
     async fn get_expired_sandboxes(&self) -> Result<Vec<Tenant>, DomainError> {
         let rows = sqlx::query(
             r#"
-            SELECT id, name, tenant_type, status, database_schema,
+            SELECT id, name, tenant_type, tier, status, database_schema,
                    created_by, expires_at, created_at, updated_at
             FROM tenants
             WHERE tenant_type = 'SANDBOX'
@@ -162,12 +167,14 @@ impl TenantRepository for PostgresTenantRepository {
         let mut tenants = Vec::new();
         for row in rows {
             let tenant_type = TenantType::from_str(row.try_get("tenant_type")?)?;
+            let tier = crate::domain::entities::tenant::TenantTier::from_str(row.try_get("tier")?)?;
             let status = TenantStatus::from_str(row.try_get("status")?)?;
 
             tenants.push(Tenant {
                 id: row.try_get("id")?,
                 name: row.try_get("name")?,
                 tenant_type,
+                tier,
                 status,
                 database_schema: row.try_get("database_schema")?,
                 created_by: row.try_get("created_by")?,

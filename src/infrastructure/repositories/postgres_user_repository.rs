@@ -22,7 +22,7 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, DomainError> {
         let result = sqlx::query!(
             r#"
-            SELECT id, email, password_hash, first_name, last_name, active, created_at, updated_at
+            SELECT id, email, password_hash, first_name, last_name, tenant_id, active, created_at, updated_at
             FROM users
             WHERE id = $1
             "#,
@@ -45,6 +45,9 @@ impl UserRepository for PostgresUserRepository {
                     password_hash,
                     first_name: row.first_name.unwrap_or_default(),
                     last_name: row.last_name.unwrap_or_default(),
+                    tenant_id: row.tenant_id.ok_or_else(|| {
+                        DomainError::ValidationError("User must have tenant_id".to_string())
+                    })?,
                     active: row.active,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
@@ -57,7 +60,7 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_email(&self, email: &Email) -> Result<Option<User>, DomainError> {
         let result = sqlx::query!(
             r#"
-            SELECT id, email, password_hash, first_name, last_name, active, created_at, updated_at
+            SELECT id, email, password_hash, first_name, last_name, tenant_id, active, created_at, updated_at
             FROM users
             WHERE email = $1
             "#,
@@ -80,6 +83,9 @@ impl UserRepository for PostgresUserRepository {
                     password_hash,
                     first_name: row.first_name.unwrap_or_default(),
                     last_name: row.last_name.unwrap_or_default(),
+                    tenant_id: row.tenant_id.ok_or_else(|| {
+                        DomainError::ValidationError("User must have tenant_id".to_string())
+                    })?,
                     active: row.active,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
@@ -92,14 +98,15 @@ impl UserRepository for PostgresUserRepository {
     async fn save(&self, user: &User) -> Result<(), DomainError> {
         sqlx::query!(
             r#"
-            INSERT INTO users (id, email, password_hash, first_name, last_name, active, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO users (id, email, password_hash, first_name, last_name, tenant_id, active, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             user.id,
             user.email.as_str(),
             user.password_hash.as_str(),
             user.first_name,
             user.last_name,
+            user.tenant_id,
             user.active,
             user.created_at,
             user.updated_at

@@ -10,6 +10,7 @@ pub struct User {
     pub password_hash: PasswordHash,
     pub first_name: String,
     pub last_name: String,
+    pub tenant_id: Uuid,
     pub active: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -21,6 +22,7 @@ impl User {
         password_hash: PasswordHash,
         first_name: String,
         last_name: String,
+        tenant_id: Uuid,
     ) -> Result<Self, DomainError> {
         if first_name.trim().is_empty() {
             return Err(DomainError::ValidationError(
@@ -42,6 +44,7 @@ impl User {
             password_hash,
             first_name,
             last_name,
+            tenant_id,
             active: true,
             created_at: now,
             updated_at: now,

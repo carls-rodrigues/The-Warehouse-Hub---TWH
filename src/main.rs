@@ -31,6 +31,7 @@ use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
 };
 use crate::infrastructure::http::routes::export_routes;
+use crate::infrastructure::middleware::rate_limit_middleware::RateLimitMiddleware;
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_job_repository::PostgresJobRepository,
@@ -76,6 +77,7 @@ pub struct AppState {
     pub stock_repository: Arc<PostgresStockRepository>,
     pub search_repository: Arc<PostgresSearchRepository>,
     pub tenant_repository: Arc<PostgresTenantRepository>,
+    pub rate_limit_middleware: Arc<RateLimitMiddleware>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
     pub create_item_use_case: Arc<CreateItemUseCase<PostgresItemRepository>>,
     pub get_item_use_case: Arc<GetItemUseCase<PostgresItemRepository>>,
@@ -453,6 +455,12 @@ async fn main() {
     // Initialize export service
     let export_service = Arc::new(ExportServiceImpl::new(Arc::clone(&job_service)));
 
+    // Initialize rate limiting middleware
+    let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let rate_limit_middleware = Arc::new(
+        RateLimitMiddleware::new(&redis_url).expect("Failed to create rate limit middleware"),
+    );
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         user_repository: Arc::clone(&user_repository),
@@ -465,6 +473,7 @@ async fn main() {
         stock_repository: Arc::clone(&stock_repository),
         search_repository: Arc::clone(&search_repository),
         tenant_repository: Arc::clone(&tenant_repository),
+        rate_limit_middleware: Arc::clone(&rate_limit_middleware),
         login_use_case,
         create_item_use_case,
         get_item_use_case,
@@ -543,6 +552,10 @@ async fn main() {
         .merge(tenant_routes())
         .merge(create_admin_router())
         .merge(export_routes::create_exports_router())
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&rate_limit_middleware),
+            crate::infrastructure::middleware::rate_limit_middleware::rate_limit_middleware,
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

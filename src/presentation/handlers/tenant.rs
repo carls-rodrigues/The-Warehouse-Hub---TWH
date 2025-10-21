@@ -12,7 +12,9 @@ use crate::application::use_cases::{
     delete_tenant::DeleteTenantUseCase, get_tenant::GetTenantUseCase,
     list_tenants::ListTenantsUseCase,
 };
-use crate::domain::entities::tenant::{CreateSandboxTenantResponse, Tenant, TenantType};
+use crate::domain::entities::tenant::{
+    CreateSandboxTenantResponse, Tenant, TenantTier, TenantType,
+};
 use crate::shared::error::DomainError;
 use crate::AppState;
 
@@ -20,6 +22,7 @@ use crate::AppState;
 pub struct CreateTenantRequest {
     pub name: String,
     pub tenant_type: String,
+    pub tier: String,
 }
 
 #[derive(Serialize)]
@@ -27,6 +30,7 @@ pub struct TenantResponse {
     pub id: Uuid,
     pub name: String,
     pub tenant_type: String,
+    pub tier: String,
     pub status: String,
     pub database_schema: String,
     pub created_by: Option<Uuid>,
@@ -41,6 +45,7 @@ impl From<Tenant> for TenantResponse {
             id: tenant.id,
             name: tenant.name,
             tenant_type: tenant.tenant_type.as_str().to_string(),
+            tier: tenant.tier.as_str().to_string(),
             status: tenant.status.as_str().to_string(),
             database_schema: tenant.database_schema,
             created_by: tenant.created_by,
@@ -73,13 +78,24 @@ pub async fn create_tenant(
         }
     };
 
+    // Parse tenant tier
+    let tier = match TenantTier::from_str(&request.tier) {
+        Ok(t) => t,
+        Err(_) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "Invalid tenant tier. Must be one of: FREE, DEVELOPER, STARTUP, GROWTH, SCALE, ENTERPRISE".to_string(),
+            ))
+        }
+    };
+
     // TODO: Get user ID from authentication context
     // For now, use None (system-created tenant)
     let created_by = None; // Placeholder - should come from auth
 
     match state
         .create_tenant_use_case
-        .execute(request.name, tenant_type, created_by)
+        .execute(request.name, tenant_type, tier, created_by)
         .await
     {
         Ok(tenant) => Ok(Json(tenant.into())),

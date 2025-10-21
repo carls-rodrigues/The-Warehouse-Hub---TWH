@@ -22,7 +22,7 @@ impl ItemRepository for PostgresItemRepository {
         let result = sqlx::query!(
             r#"
             SELECT id, sku, name, description, category, unit, barcode, cost_price, sale_price,
-                   reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at
+                   reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at
             FROM items
             WHERE id = $1
             "#,
@@ -115,8 +115,8 @@ impl ItemRepository for PostgresItemRepository {
         sqlx::query!(
             r#"
             INSERT INTO items (id, sku, name, description, category, unit, barcode, cost_price, sale_price,
-                              reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                              reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             "#,
             item.id,
             item.sku,
@@ -132,6 +132,7 @@ impl ItemRepository for PostgresItemRepository {
             item.weight,
             dimensions_json,
             item.metadata,
+            uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(), // Default tenant
             item.active,
             item.created_at,
             item.updated_at

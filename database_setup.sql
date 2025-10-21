@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     tenant_type VARCHAR(50) NOT NULL CHECK (tenant_type IN ('PRODUCTION', 'SANDBOX')),
+    tier VARCHAR(50) NOT NULL DEFAULT 'FREE' CHECK (tier IN ('FREE', 'DEVELOPER', 'STARTUP', 'GROWTH', 'SCALE', 'ENTERPRISE')),
     status VARCHAR(50) NOT NULL DEFAULT 'PROVISIONING' CHECK (status IN ('PROVISIONING', 'ACTIVE', 'SUSPENDED', 'DELETING')),
     database_schema VARCHAR(100) NOT NULL UNIQUE,
     created_by UUID REFERENCES users(id),
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Create indexes for tenants
 CREATE INDEX IF NOT EXISTS idx_tenants_tenant_type ON tenants(tenant_type);
+CREATE INDEX IF NOT EXISTS idx_tenants_tier ON tenants(tier);
 CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
 CREATE INDEX IF NOT EXISTS idx_tenants_database_schema ON tenants(database_schema);
 CREATE INDEX IF NOT EXISTS idx_tenants_expires_at ON tenants(expires_at);

@@ -6,6 +6,56 @@ use crate::shared::error::DomainError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TenantTier {
+    Free,
+    Developer,
+    Startup,
+    Growth,
+    Scale,
+    Enterprise,
+}
+
+impl TenantTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TenantTier::Free => "FREE",
+            TenantTier::Developer => "DEVELOPER",
+            TenantTier::Startup => "STARTUP",
+            TenantTier::Growth => "GROWTH",
+            TenantTier::Scale => "SCALE",
+            TenantTier::Enterprise => "ENTERPRISE",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, DomainError> {
+        match s.to_uppercase().as_str() {
+            "FREE" => Ok(TenantTier::Free),
+            "DEVELOPER" => Ok(TenantTier::Developer),
+            "STARTUP" => Ok(TenantTier::Startup),
+            "GROWTH" => Ok(TenantTier::Growth),
+            "SCALE" => Ok(TenantTier::Scale),
+            "ENTERPRISE" => Ok(TenantTier::Enterprise),
+            _ => Err(DomainError::ValidationError(format!(
+                "Invalid tenant tier: {}. Must be one of: FREE, DEVELOPER, STARTUP, GROWTH, SCALE, ENTERPRISE",
+                s
+            ))),
+        }
+    }
+
+    pub fn requests_per_minute(&self) -> u32 {
+        match self {
+            TenantTier::Free => 10,      // 10k/month = ~10/minute (generous for sandbox)
+            TenantTier::Developer => 50, // 100k/month = ~50/minute
+            TenantTier::Startup => 200,  // 500k/month = ~200/minute
+            TenantTier::Growth => 800,   // 2M/month = ~800/minute
+            TenantTier::Scale => 4000,   // 10M/month = ~4000/minute
+            TenantTier::Enterprise => 10000, // Custom high limit for enterprise
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TenantType {
     Production,
     Sandbox,
@@ -69,6 +119,7 @@ pub struct Tenant {
     pub id: Uuid,
     pub name: String,
     pub tenant_type: TenantType,
+    pub tier: TenantTier,
     pub status: TenantStatus,
     pub database_schema: String,
     pub created_by: Option<Uuid>, // User who created the tenant (None for system-created)
@@ -81,6 +132,7 @@ impl Tenant {
     pub fn new(
         name: String,
         tenant_type: TenantType,
+        tier: TenantTier,
         database_schema: String,
         created_by: Option<Uuid>,
     ) -> Result<Self, DomainError> {
@@ -110,6 +162,7 @@ impl Tenant {
             id: Uuid::new_v4(),
             name,
             tenant_type,
+            tier,
             status,
             database_schema,
             created_by,
@@ -127,6 +180,7 @@ impl Tenant {
             id,
             name: format!("sandbox-{}", id.simple()),
             tenant_type: TenantType::Sandbox,
+            tier: TenantTier::Free,
             status: TenantStatus::Provisioning,
             database_schema: format!("tenant_{}", id.simple()),
             created_by,

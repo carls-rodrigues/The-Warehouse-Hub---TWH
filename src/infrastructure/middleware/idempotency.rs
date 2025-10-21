@@ -10,10 +10,10 @@ use axum::{
 use sha2::{Digest, Sha256};
 
 use crate::domain::entities::idempotency::{IdempotencyKey, IdempotencyKeyRequest};
-use crate::domain::services::IdempotencyRepository;
+use crate::domain::services::idempotency_repository::IdempotencyRepository;
 use crate::shared::error::DomainError;
 
-pub async fn idempotency_middleware<R: IdempotencyRepository>(
+pub async fn idempotency_middleware<R: IdempotencyRepository + 'static>(
     idempotency_repo: Arc<R>,
     request: Request,
     next: Next,
@@ -87,7 +87,7 @@ pub async fn idempotency_middleware<R: IdempotencyRepository>(
     // Store the key
     if let Err(e) = idempotency_repo.store_key(&key).await {
         match e {
-            DomainError::ConflictError(_) => {
+            DomainError::Conflict(_) => {
                 // Key was created by another concurrent request, try to get it
                 match idempotency_repo.get_key(&idempotency_key).await {
                     Ok(Some(existing_key)) => {

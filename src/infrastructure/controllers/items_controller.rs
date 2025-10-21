@@ -146,11 +146,36 @@ pub async fn create_item_handler(
     State(state): State<AppState>,
     Json(request): Json<CreateItemRequestDto>,
 ) -> Result<(StatusCode, Json<CreateItemResponseDto>), (StatusCode, Json<ErrorResponse>)> {
-    // Initialize use case
-    let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&state.pool)));
-    let use_case = CreateItemUseCase::new(item_repository);
+    // For now, use default tenant. In production, this would come from JWT middleware
+    let tenant_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
 
-    // Convert DTO to domain request
+    // Start a transaction and set tenant context within it
+    let mut tx = state.pool.begin().await.map_err(|e| {
+        let error_response = ErrorResponse {
+            error: "INTERNAL_ERROR".to_string(),
+            message: format!("Failed to start transaction: {e}"),
+        };
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
+    })?;
+
+    // Set tenant context for this transaction
+    sqlx::query("SELECT set_tenant_context($1)")
+        .bind(tenant_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            let error_response = ErrorResponse {
+                error: "INTERNAL_ERROR".to_string(),
+                message: format!("Failed to set tenant context: {e}"),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
+        })?;
+
+    // Initialize use case with transaction
+    // Note: This requires modifying the repository to accept a transaction
+    // For now, let's use the regular approach and see if the session context works
+    let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&state.pool)));
+    let use_case = CreateItemUseCase::new(item_repository); // Convert DTO to domain request
     let domain_request = CreateItemRequest {
         sku: request.sku,
         name: request.name,

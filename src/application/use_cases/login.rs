@@ -88,6 +88,7 @@ impl<R: UserRepository> LoginUseCase<R> {
         let claims = Claims {
             sub: user.id.to_string(),
             email: user.email.as_str().to_string(),
+            tenant_id: user.tenant_id.to_string(),
             exp: expiration.timestamp() as usize,
             iat: chrono::Utc::now().timestamp() as usize,
         };
@@ -103,10 +104,11 @@ impl<R: UserRepository> LoginUseCase<R> {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    sub: String,   // User ID
-    email: String, // User email
-    exp: usize,    // Expiration time
-    iat: usize,    // Issued at time
+    sub: String,       // User ID
+    email: String,     // User email
+    tenant_id: String, // Tenant ID
+    exp: usize,        // Expiration time
+    iat: usize,        // Issued at time
 }
 
 #[cfg(test)]
@@ -185,7 +187,14 @@ mod tests {
         let password_hash = PasswordHash::from_hash(
             "$2b$12$kQMaeUg9psmEZ/L6aS/d6.YrMZv5VCym3ebSX7D1.3lvT3iq6/wfC".to_string(),
         );
-        User::new(email, password_hash, "Test".to_string(), "User".to_string()).unwrap()
+        User::new(
+            email,
+            password_hash,
+            "Test".to_string(),
+            "User".to_string(),
+            Uuid::new_v4(),
+        )
+        .unwrap()
     }
 
     #[tokio::test]
