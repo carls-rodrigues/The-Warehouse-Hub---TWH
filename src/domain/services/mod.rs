@@ -1,8 +1,12 @@
 // Domain services will be implemented here
 pub mod idempotency_repository;
 pub mod item_repository;
+pub mod job_processor;
+pub mod job_repository;
+pub mod job_service;
 pub mod location_repository;
 pub mod purchase_order_repository;
+pub mod report_service;
 pub mod return_repository;
 pub mod sales_order_repository;
 pub mod search_projection;

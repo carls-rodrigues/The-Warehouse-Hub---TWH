@@ -2,6 +2,7 @@
 pub mod composite_idempotency_repository;
 pub mod postgres_idempotency_repository;
 pub mod postgres_item_repository;
+pub mod postgres_job_repository;
 pub mod postgres_location_repository;
 pub mod postgres_purchase_order_repository;
 pub mod postgres_return_repository;

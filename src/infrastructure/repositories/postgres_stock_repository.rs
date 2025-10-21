@@ -419,4 +419,157 @@ impl StockRepository for PostgresStockRepository {
 
         Ok(result.exists.unwrap_or(false))
     }
+
+    async fn get_stock_levels_below_threshold(
+        &self,
+        threshold: i32,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<crate::domain::services::stock_repository::PaginatedStockLevels, DomainError> {
+        let offset = cursor
+            .as_ref()
+            .and_then(|c| c.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        let results: Vec<_> = sqlx::query!(
+            r#"
+            SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
+            FROM stock_levels
+            WHERE quantity_on_hand <= $1
+            ORDER BY item_id, location_id
+            LIMIT $2 OFFSET $3
+            "#,
+            threshold,
+            limit,
+            offset
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| DomainError::ValidationError(format!("Database error: {}", e)))?;
+
+        let stock_levels: Vec<StockLevel> = results
+            .into_iter()
+            .map(|row| StockLevel {
+                item_id: row.item_id,
+                location_id: row.location_id,
+                quantity_on_hand: row.quantity_on_hand,
+                last_movement_id: row.last_movement_id,
+                updated_at: row.updated_at,
+            })
+            .collect();
+
+        let next_cursor = if stock_levels.len() == limit as usize {
+            Some((offset + limit).to_string())
+        } else {
+            None
+        };
+
+        Ok(
+            crate::domain::services::stock_repository::PaginatedStockLevels {
+                items: stock_levels,
+                next_cursor,
+            },
+        )
+    }
+
+    async fn get_stock_levels_by_location(
+        &self,
+        location_id: Uuid,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<crate::domain::services::stock_repository::PaginatedStockLevels, DomainError> {
+        let offset = cursor
+            .as_ref()
+            .and_then(|c| c.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        let results: Vec<_> = sqlx::query!(
+            r#"
+            SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
+            FROM stock_levels
+            WHERE location_id = $1
+            ORDER BY item_id
+            LIMIT $2 OFFSET $3
+            "#,
+            location_id,
+            limit,
+            offset
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| DomainError::ValidationError(format!("Database error: {}", e)))?;
+
+        let stock_levels: Vec<StockLevel> = results
+            .into_iter()
+            .map(|row| StockLevel {
+                item_id: row.item_id,
+                location_id: row.location_id,
+                quantity_on_hand: row.quantity_on_hand,
+                last_movement_id: row.last_movement_id,
+                updated_at: row.updated_at,
+            })
+            .collect();
+
+        let next_cursor = if stock_levels.len() == limit as usize {
+            Some((offset + limit).to_string())
+        } else {
+            None
+        };
+
+        Ok(
+            crate::domain::services::stock_repository::PaginatedStockLevels {
+                items: stock_levels,
+                next_cursor,
+            },
+        )
+    }
+
+    async fn get_all_stock_levels(
+        &self,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<crate::domain::services::stock_repository::PaginatedStockLevels, DomainError> {
+        let offset = cursor
+            .as_ref()
+            .and_then(|c| c.parse::<i64>().ok())
+            .unwrap_or(0);
+
+        let results: Vec<_> = sqlx::query!(
+            r#"
+            SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
+            FROM stock_levels
+            ORDER BY item_id, location_id
+            LIMIT $1 OFFSET $2
+            "#,
+            limit,
+            offset
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| DomainError::ValidationError(format!("Database error: {}", e)))?;
+
+        let stock_levels: Vec<StockLevel> = results
+            .into_iter()
+            .map(|row| StockLevel {
+                item_id: row.item_id,
+                location_id: row.location_id,
+                quantity_on_hand: row.quantity_on_hand,
+                last_movement_id: row.last_movement_id,
+                updated_at: row.updated_at,
+            })
+            .collect();
+
+        let next_cursor = if stock_levels.len() == limit as usize {
+            Some((offset + limit).to_string())
+        } else {
+            None
+        };
+
+        Ok(
+            crate::domain::services::stock_repository::PaginatedStockLevels {
+                items: stock_levels,
+                next_cursor,
+            },
+        )
+    }
 }

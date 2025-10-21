@@ -3,6 +3,12 @@ use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use uuid::Uuid;
 
+#[derive(Debug, Clone)]
+pub struct PaginatedStockLevels {
+    pub items: Vec<StockLevel>,
+    pub next_cursor: Option<String>,
+}
+
 #[async_trait]
 pub trait StockRepository: Send + Sync {
     /// Record a new stock movement and update stock levels atomically
@@ -68,4 +74,27 @@ pub trait StockRepository: Send + Sync {
         item_id: Uuid,
         location_id: Uuid,
     ) -> Result<bool, DomainError>;
+
+    /// Get stock levels below a threshold for low stock report
+    async fn get_stock_levels_below_threshold(
+        &self,
+        threshold: i32,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<PaginatedStockLevels, DomainError>;
+
+    /// Get stock levels by location with pagination
+    async fn get_stock_levels_by_location(
+        &self,
+        location_id: Uuid,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<PaginatedStockLevels, DomainError>;
+
+    /// Get all stock levels with pagination
+    async fn get_all_stock_levels(
+        &self,
+        limit: i64,
+        cursor: Option<String>,
+    ) -> Result<PaginatedStockLevels, DomainError>;
 }

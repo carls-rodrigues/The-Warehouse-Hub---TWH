@@ -1,6 +1,7 @@
 pub mod idempotency;
 pub mod inventory;
 pub mod item;
+pub mod job;
 pub mod location;
 pub mod purchase_order;
 pub mod returns;

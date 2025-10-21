@@ -9,10 +9,12 @@ use crate::application::use_cases::{
     create_location::CreateLocationUseCase, create_purchase_order::CreatePurchaseOrderUseCase,
     create_return::CreateReturnUseCase, create_sales_order::CreateSalesOrderUseCase,
     create_transfer::CreateTransferUseCase, delete_item::DeleteItemUseCase,
-    delete_location::DeleteLocationUseCase, get_item::GetItemUseCase,
-    get_location::GetLocationUseCase, get_purchase_order::GetPurchaseOrderUseCase,
-    get_return::GetReturnUseCase, get_stock_level::GetStockLevelUseCase,
-    get_stock_movements::GetStockMovementsUseCase,
+    delete_location::DeleteLocationUseCase, enqueue_job::EnqueueJobUseCase,
+    get_item::GetItemUseCase, get_job_status::GetJobStatusUseCase,
+    get_location::GetLocationUseCase, get_low_stock_report::GetLowStockReportUseCase,
+    get_purchase_order::GetPurchaseOrderUseCase, get_return::GetReturnUseCase,
+    get_stock_level::GetStockLevelUseCase, get_stock_movements::GetStockMovementsUseCase,
+    get_stock_valuation_report::GetStockValuationReportUseCase,
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
     list_locations::ListLocationsUseCase, login::LoginUseCase,
     process_return::ProcessReturnUseCase, receive_purchase_order::ReceivePurchaseOrderUseCase,
@@ -26,6 +28,7 @@ use crate::infrastructure::controllers::{
 };
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
+    postgres_job_repository::PostgresJobRepository,
     postgres_location_repository::PostgresLocationRepository,
     postgres_purchase_order_repository::PostgresPurchaseOrderRepository,
     postgres_return_repository::PostgresReturnRepository,
@@ -36,10 +39,13 @@ use crate::infrastructure::repositories::{
     postgres_user_repository::PostgresUserRepository,
     postgres_webhook_repository::PostgresWebhookRepository,
 };
+use crate::infrastructure::services::{
+    job_service_impl::JobServiceImpl, report_service_impl::ReportServiceImpl,
+};
 use crate::presentation::routes::{
-    create_purchase_order_routes, create_stock_routes, create_webhook_routes,
-    returns::return_routes, sales_order::sales_order_routes, search::create_search_routes,
-    transfer::transfer_routes,
+    create_jobs_routes, create_purchase_order_routes, create_reports_routes, create_stock_routes,
+    create_webhook_routes, returns::return_routes, sales_order::sales_order_routes,
+    search::create_search_routes, transfer::transfer_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -153,6 +159,23 @@ pub struct AppState {
     >,
     pub webhook_repository: Arc<PostgresWebhookRepository>,
     pub webhook_dispatcher: Arc<WebhookDispatcherImpl<PostgresWebhookRepository>>,
+    pub report_service: Arc<ReportServiceImpl<PostgresItemRepository, PostgresStockRepository>>,
+    pub get_low_stock_report_use_case: Arc<
+        GetLowStockReportUseCase<
+            PostgresItemRepository,
+            PostgresStockRepository,
+            ReportServiceImpl<PostgresItemRepository, PostgresStockRepository>,
+        >,
+    >,
+    pub get_stock_valuation_report_use_case: Arc<
+        GetStockValuationReportUseCase<
+            ReportServiceImpl<PostgresItemRepository, PostgresStockRepository>,
+        >,
+    >,
+    pub job_repository: Arc<PostgresJobRepository>,
+    pub job_service: Arc<JobServiceImpl<PostgresJobRepository>>,
+    pub enqueue_job_use_case: Arc<EnqueueJobUseCase<JobServiceImpl<PostgresJobRepository>>>,
+    pub get_job_status_use_case: Arc<GetJobStatusUseCase<JobServiceImpl<PostgresJobRepository>>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -288,6 +311,26 @@ async fn main() {
         Arc::clone(&webhook_dispatcher),
     ));
 
+    // Initialize report service and use cases
+    let report_service = Arc::new(ReportServiceImpl::new(
+        Arc::clone(&item_repository),
+        Arc::clone(&stock_repository),
+    ));
+    let get_low_stock_report_use_case = Arc::new(GetLowStockReportUseCase::new(
+        Arc::clone(&item_repository),
+        Arc::clone(&stock_repository),
+        Arc::clone(&report_service),
+    ));
+    let get_stock_valuation_report_use_case = Arc::new(GetStockValuationReportUseCase::new(
+        Arc::clone(&report_service),
+    ));
+
+    // Initialize job repository and service
+    let job_repository = Arc::new(PostgresJobRepository::new(Arc::clone(&pool)));
+    let job_service = Arc::new(JobServiceImpl::new(Arc::clone(&job_repository)));
+    let enqueue_job_use_case = Arc::new(EnqueueJobUseCase::new(Arc::clone(&job_service)));
+    let get_job_status_use_case = Arc::new(GetJobStatusUseCase::new(Arc::clone(&job_service)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         user_repository: Arc::clone(&user_repository),
@@ -328,6 +371,13 @@ async fn main() {
         adjust_stock_use_case,
         webhook_repository,
         webhook_dispatcher,
+        report_service,
+        get_low_stock_report_use_case,
+        get_stock_valuation_report_use_case,
+        job_repository: Arc::clone(&job_repository),
+        job_service: Arc::clone(&job_service),
+        enqueue_job_use_case: Arc::clone(&enqueue_job_use_case),
+        get_job_status_use_case: Arc::clone(&get_job_status_use_case),
     };
 
     // Build the application with routes
@@ -346,6 +396,8 @@ async fn main() {
         .route("/locations/{id}", delete(delete_location_handler))
         .merge(create_search_routes())
         .merge(create_stock_routes())
+        .merge(create_reports_routes())
+        .merge(create_jobs_routes())
         .merge(create_purchase_order_routes())
         .merge(sales_order_routes())
         .merge(transfer_routes())
