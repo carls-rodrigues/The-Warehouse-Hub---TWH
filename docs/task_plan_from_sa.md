@@ -4,10 +4,10 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ## Overview
 
-- **Total Tasks**: 40 (32 original + 8 Stripe integration)
-- **Estimated Timeline**: 10 weeks with 4 developers (extended for Stripe integration)
-- **Critical Path**: OpenAPI integration → Items CRUD → Ledger implementation → Projections → Stripe Setup → Customer Management → Subscription Management → Admin UI
-- **Key Deliverables**: Complete inventory management API with event-sourced ledger, projections, webhooks, jobs, admin UI, Stripe billing integration, and production observability
+- **Total Tasks**: 40
+- **Estimated Timeline**: 10 weeks with 4 developers
+- **Critical Path**: OpenAPI integration → Items CRUD → Ledger implementation → Projections → Observability → Stripe setup → Customer management → Subscription management
+- **Key Deliverables**: Complete inventory management API with event-sourced ledger, projections, webhooks, jobs, admin UI, production observability, and Stripe billing integration
 
 ## Task Breakdown
 
@@ -74,7 +74,7 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 - **TASK-039**: Build admin UI for Stripe billing management (24h, P0)
 - **TASK-040**: Implement billing reconciliation and comprehensive testing (20h, P0)
 
-### DR and Polish Tasks (Sprint 8)
+### DR and Polish Tasks (Sprint 10)
 
  - **TASK-015**: Implement backups, PITR and DR runbooks (40h, P0)
  - **TASK-016**: Create Node and Python SDKs and publish quickstarts (32h, P0)
@@ -83,13 +83,14 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ### Critical Path
 
-TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
+TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010 → TASK-033 → TASK-034 → TASK-036 → TASK-037
 
 ### Parallel Tracks
 
 1. DevEx Track: TASK-002 → TASK-012 → TASK-018 → TASK-016
 2. Async Track: TASK-005 → TASK-006 → TASK-007
-3. Business Track: TASK-009 → TASK-011 → TASK-013
+3. Security Track: TASK-014 → TASK-017 → TASK-028
+4. Billing Track: TASK-033 → TASK-035 → TASK-038 → TASK-039 → TASK-040
 
 ## Sprint Plan
 
