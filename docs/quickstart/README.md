@@ -7,60 +7,70 @@ This directory contains quickstart materials for The Warehouse Hub API.
 1. **Create a Sandbox Tenant**
 
    ```bash
-   curl -X POST https://sandbox.api.thewarehousehub.com/v1/admin/sandbox \
-     -H "Authorization: Bearer YOUR_API_KEY" \
+   curl -X POST http://localhost:8080/tenants/sandbox \
      -H "Content-Type: application/json" \
      -d '{}'
    ```
 
-2. **Get Your API Key**
-   - Use the API key returned from the sandbox creation
-   - Set it as an environment variable: `export TWH_API_KEY=your_key_here`
+   This will return a response like:
+   ```json
+   {
+     "id": "550e8400-e29b-41d4-a716-446655440000",
+     "status": "ACTIVE",
+     "created_at": "2025-10-21T10:00:00Z",
+     "expires_at": "2025-11-20T10:00:00Z"
+   }
+   ```
+
+2. **Set Your Tenant ID**
+   - Use the `id` from the response as your tenant identifier
+   - Set it as an environment variable: `export TWH_TENANT_ID=your_tenant_id_here`
 
 3. **Test Basic Connectivity**
 
    ```bash
-   curl -H "Authorization: Bearer $TWH_API_KEY" \
-        -H "X-Tenant-ID: YOUR_TENANT_ID" \
-        https://sandbox.api.thewarehousehub.com/v1/healthz
+   curl -H "X-Tenant-ID: $TWH_TENANT_ID" \
+        http://localhost:8080/healthz
    ```
 
 ## Sample Data
 
 Your sandbox tenant comes pre-loaded with:
 
-- Sample items (widgets, gadgets)
-- Sample locations (warehouse-1, warehouse-2)
-- Sample webhook subscriptions
+- **Locations**: Main Warehouse (WH-001), Retail Store (ST-001)
+- **Items**: Laptop (electronics), Mouse (electronics), Keyboard (electronics), T-Shirt (apparel)
 
 ## Postman Collection
 
-Import `twh-api.postman_collection.json` into Postman to explore all API endpoints with pre-configured requests.
+Import `twh-postman-collection.json` into Postman to explore all API endpoints with pre-configured requests.
 
 ### Environment Variables for Postman
 
 Set these variables in your Postman environment:
 
-- `base_url`: `https://sandbox.api.thewarehousehub.com/v1`
-- `api_key`: Your sandbox API key
+- `base_url`: `http://localhost:8080`
 - `tenant_id`: Your sandbox tenant ID
+
+## Example: List Items
+
+```bash
+curl -H "X-Tenant-ID: $TWH_TENANT_ID" \
+     http://localhost:8080/items
+```
 
 ## Example: Create an Item
 
 ```bash
-curl -X POST https://sandbox.api.thewarehousehub.com/v1/items \
-  -H "Authorization: Bearer $TWH_API_KEY" \
-  -H "X-Tenant-ID: $TENANT_ID" \
+curl -X POST http://localhost:8080/items \
+  -H "X-Tenant-ID: $TWH_TENANT_ID" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
   -d '{
     "sku": "WIDGET-001",
     "name": "Sample Widget",
     "description": "A sample inventory item",
-    "metadata": {
-      "category": "electronics",
-      "price": 29.99
-    }
+    "unit": "ea",
+    "cost_price": 29.99
   }'
 ```
 

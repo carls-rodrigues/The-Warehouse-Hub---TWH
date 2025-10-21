@@ -507,6 +507,18 @@ async fn main() {
         .merge(export_routes::create_exports_router())
         .with_state(app_state);
 
+    // Start background cleanup job for expired sandboxes
+    let cleanup_use_case = Arc::clone(&cleanup_expired_sandboxes_use_case);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // Run every hour
+        loop {
+            interval.tick().await;
+            if let Err(e) = cleanup_use_case.execute().await {
+                eprintln!("Error during sandbox cleanup: {:?}", e);
+            }
+        }
+    });
+
     // Run the server
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{port}");

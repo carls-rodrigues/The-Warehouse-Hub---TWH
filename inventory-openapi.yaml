@@ -117,6 +117,18 @@ components:
         request_id:
           type: string
           description: Request identifier for support/debugging
+    TenantStatus:
+      type: string
+      enum: [PROVISIONING, ACTIVE, EXPIRED, SUSPENDED]
+      description: Status of the tenant
+    CreateSandboxTenantResponse:
+      type: object
+      required: [id, status, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        status: { $ref: '#/components/schemas/TenantStatus' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
     PagingMeta:
       type: object
       properties:
@@ -403,6 +415,24 @@ components:
           description: The prefix that was used to generate suggestions
 
 paths:
+  /tenants/sandbox:
+    post:
+      summary: Create a new sandbox tenant with sample data
+      tags: [Tenants]
+      description: Creates a new ephemeral sandbox tenant pre-populated with sample locations and items for testing and development
+      responses:
+        '201':
+          description: Sandbox tenant created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSandboxTenantResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /auth/login:
     post:
       summary: Obtain JWT access token (for sandbox; production use API key via RapidAPI)
