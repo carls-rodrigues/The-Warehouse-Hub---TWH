@@ -218,6 +218,7 @@ impl Return {
                 )),
                 Some(self.created_by),
             )?;
+            stock_movements.push(movement);
         }
 
         // Check if all lines are fully received

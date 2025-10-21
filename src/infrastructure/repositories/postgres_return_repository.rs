@@ -52,21 +52,6 @@ impl PostgresReturnRepository {
         .await
         .map_err(|e| DomainError::DatabaseError(e.to_string()))?;
 
-        let return_entity = Return {
-            id: return_row.id,
-            return_number: return_row.return_number,
-            location_id: return_row.location_id,
-            customer_id: return_row.customer_id,
-            status: ReturnStatus::from_str(&return_row.status)
-                .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
-            total_quantity: return_row.total_quantity,
-            notes: return_row.notes,
-            lines: vec![], // Will be filled below
-            created_by: return_row.created_by,
-            created_at: return_row.created_at,
-            updated_at: return_row.updated_at,
-        };
-
         let lines: Vec<ReturnLine> = line_rows
             .into_iter()
             .map(|row| ReturnLine {
@@ -81,6 +66,21 @@ impl PostgresReturnRepository {
                 updated_at: row.updated_at,
             })
             .collect();
+
+        let return_entity = Return {
+            id: return_row.id,
+            return_number: return_row.return_number,
+            location_id: return_row.location_id,
+            customer_id: return_row.customer_id,
+            status: ReturnStatus::from_str(&return_row.status)
+                .map_err(|e| DomainError::DatabaseError(e.to_string()))?,
+            total_quantity: return_row.total_quantity,
+            notes: return_row.notes,
+            lines: lines.clone(), // Populate the lines field
+            created_by: return_row.created_by,
+            created_at: return_row.created_at,
+            updated_at: return_row.updated_at,
+        };
 
         Ok(Some((return_entity, lines)))
     }

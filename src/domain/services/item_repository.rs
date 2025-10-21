@@ -1,4 +1,4 @@
-use crate::domain::entities::item::{Item, UpdateItemRequest};
+use crate::domain::entities::item::Item;
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
 use uuid::Uuid;

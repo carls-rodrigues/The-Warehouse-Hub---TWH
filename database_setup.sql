@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     location_id UUID NOT NULL REFERENCES locations(id),
     movement_type VARCHAR(20) NOT NULL CHECK (movement_type IN ('inbound', 'outbound', 'adjustment', 'transfer', 'initial')),
     quantity INTEGER NOT NULL,
-    reference_type VARCHAR(20) NOT NULL CHECK (reference_type IN ('purchase_order', 'sales_order', 'adjustment', 'transfer', 'initial')),
+    reference_type VARCHAR(20) NOT NULL CHECK (reference_type IN ('purchase_order', 'sales_order', 'adjustment', 'transfer', 'initial', 'return')),
     reference_id UUID,
     reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
