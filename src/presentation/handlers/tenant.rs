@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::application::use_cases::{
-    cleanup_expired_sandboxes::CleanupExpiredSandboxesUseCase, create_tenant::CreateTenantUseCase,
+    cleanup_expired_sandboxes::CleanupExpiredSandboxesUseCase,
+    create_sandbox_tenant::CreateSandboxTenantUseCase, create_tenant::CreateTenantUseCase,
     delete_tenant::DeleteTenantUseCase, get_tenant::GetTenantUseCase,
     list_tenants::ListTenantsUseCase,
 };
-use crate::domain::entities::tenant::{Tenant, TenantType};
+use crate::domain::entities::tenant::{CreateSandboxTenantResponse, Tenant, TenantType};
 use crate::shared::error::DomainError;
 use crate::AppState;
 
@@ -85,6 +86,34 @@ pub async fn create_tenant(
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to create tenant: {}", e),
+        )),
+    }
+}
+
+pub async fn create_sandbox_tenant(
+    State(state): State<AppState>,
+) -> Result<Json<CreateSandboxTenantResponse>, (StatusCode, String)> {
+    // TODO: Get user ID from authentication context
+    // For now, use None (system-created tenant)
+    let created_by = None; // Placeholder - should come from auth
+
+    match state
+        .create_sandbox_tenant_use_case
+        .execute(created_by)
+        .await
+    {
+        Ok(tenant) => {
+            let response = CreateSandboxTenantResponse {
+                tenant_id: tenant.id,
+                status: tenant.status.as_str().to_string(),
+                expires_at: tenant.expires_at.unwrap_or_default(),
+                message: "Sandbox tenant created successfully with sample data".to_string(),
+            };
+            Ok(Json(response))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create sandbox tenant: {}", e),
         )),
     }
 }

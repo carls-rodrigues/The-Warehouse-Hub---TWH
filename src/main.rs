@@ -8,13 +8,14 @@ use crate::application::use_cases::{
     adjust_stock::AdjustStockUseCase, cleanup_expired_sandboxes::CleanupExpiredSandboxesUseCase,
     create_item::CreateItemUseCase, create_location::CreateLocationUseCase,
     create_purchase_order::CreatePurchaseOrderUseCase, create_return::CreateReturnUseCase,
-    create_sales_order::CreateSalesOrderUseCase, create_tenant::CreateTenantUseCase,
-    create_transfer::CreateTransferUseCase, delete_item::DeleteItemUseCase,
-    delete_location::DeleteLocationUseCase, delete_tenant::DeleteTenantUseCase,
-    enqueue_job::EnqueueJobUseCase, get_item::GetItemUseCase, get_job_status::GetJobStatusUseCase,
-    get_location::GetLocationUseCase, get_low_stock_report::GetLowStockReportUseCase,
-    get_purchase_order::GetPurchaseOrderUseCase, get_return::GetReturnUseCase,
-    get_stock_level::GetStockLevelUseCase, get_stock_movements::GetStockMovementsUseCase,
+    create_sales_order::CreateSalesOrderUseCase, create_sandbox_tenant::CreateSandboxTenantUseCase,
+    create_tenant::CreateTenantUseCase, create_transfer::CreateTransferUseCase,
+    delete_item::DeleteItemUseCase, delete_location::DeleteLocationUseCase,
+    delete_tenant::DeleteTenantUseCase, enqueue_job::EnqueueJobUseCase, get_item::GetItemUseCase,
+    get_job_status::GetJobStatusUseCase, get_location::GetLocationUseCase,
+    get_low_stock_report::GetLowStockReportUseCase, get_purchase_order::GetPurchaseOrderUseCase,
+    get_return::GetReturnUseCase, get_stock_level::GetStockLevelUseCase,
+    get_stock_movements::GetStockMovementsUseCase,
     get_stock_valuation_report::GetStockValuationReportUseCase, get_tenant::GetTenantUseCase,
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
     list_locations::ListLocationsUseCase, list_tenants::ListTenantsUseCase, login::LoginUseCase,
@@ -188,6 +189,13 @@ pub struct AppState {
         >,
     >,
     pub create_tenant_use_case: Arc<CreateTenantUseCase<PostgresTenantRepository>>,
+    pub create_sandbox_tenant_use_case: Arc<
+        CreateSandboxTenantUseCase<
+            PostgresTenantRepository,
+            PostgresItemRepository,
+            PostgresLocationRepository,
+        >,
+    >,
     pub get_tenant_use_case: Arc<GetTenantUseCase<PostgresTenantRepository>>,
     pub list_tenants_use_case: Arc<ListTenantsUseCase<PostgresTenantRepository>>,
     pub delete_tenant_use_case: Arc<DeleteTenantUseCase<PostgresTenantRepository>>,
@@ -308,6 +316,19 @@ async fn main() {
     let delete_location_use_case =
         Arc::new(DeleteLocationUseCase::new(Arc::clone(&location_repository)));
 
+    // Initialize tenant use cases
+    let create_tenant_use_case = Arc::new(CreateTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let create_sandbox_tenant_use_case = Arc::new(CreateSandboxTenantUseCase::new(
+        Arc::clone(&tenant_repository),
+        CreateItemUseCase::new(Arc::clone(&item_repository)),
+        CreateLocationUseCase::new(Arc::clone(&location_repository)),
+    ));
+    let get_tenant_use_case = Arc::new(GetTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let list_tenants_use_case = Arc::new(ListTenantsUseCase::new(Arc::clone(&tenant_repository)));
+    let delete_tenant_use_case = Arc::new(DeleteTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let cleanup_expired_sandboxes_use_case = Arc::new(CleanupExpiredSandboxesUseCase::new(
+        Arc::clone(&tenant_repository),
+    ));
     let create_purchase_order_use_case = Arc::new(CreatePurchaseOrderUseCase::new(
         Arc::clone(&purchase_order_repository),
         Arc::clone(&webhook_dispatcher),
@@ -444,6 +465,7 @@ async fn main() {
         test_webhook_use_case: Arc::clone(&test_webhook_use_case),
         retry_webhook_delivery_use_case: Arc::clone(&retry_webhook_delivery_use_case),
         create_tenant_use_case: Arc::clone(&create_tenant_use_case),
+        create_sandbox_tenant_use_case: Arc::clone(&create_sandbox_tenant_use_case),
         get_tenant_use_case: Arc::clone(&get_tenant_use_case),
         list_tenants_use_case: Arc::clone(&list_tenants_use_case),
         delete_tenant_use_case: Arc::clone(&delete_tenant_use_case),

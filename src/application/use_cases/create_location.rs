@@ -26,6 +26,7 @@ pub struct CreateLocationResponse {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Clone)]
 pub struct CreateLocationUseCase<R: LocationRepository> {
     location_repository: Arc<R>,
 }

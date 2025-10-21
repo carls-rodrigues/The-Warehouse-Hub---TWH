@@ -6,6 +6,7 @@ pub mod create_location;
 pub mod create_purchase_order;
 pub mod create_return;
 pub mod create_sales_order;
+pub mod create_sandbox_tenant;
 pub mod create_tenant;
 pub mod create_transfer;
 pub mod delete_item;

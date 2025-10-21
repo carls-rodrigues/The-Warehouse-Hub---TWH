@@ -34,6 +34,7 @@ pub struct CreateItemResponse {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Clone)]
 pub struct CreateItemUseCase<R: ItemRepository> {
     item_repository: Arc<R>,
 }
