@@ -1,8 +1,7 @@
 "use client"
 
 import AdminLayout from "@/components/admin-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { DollarSign, TrendingUp, Users, Database, Package, MapPin, ShoppingCart, Truck, Webhook, Calendar, AlertCircle } from "lucide-react"
 import { useEffect, useState } from "react"

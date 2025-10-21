@@ -2,15 +2,10 @@
 
 import * as React from "react"
 import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
   Frame,
   GalleryVerticalEnd,
   Map,
   PieChart,
-  Settings2,
   SquareTerminal,
   Database,
   Webhook,
@@ -55,50 +50,16 @@ const data = {
       title: "DLQ Management",
       url: "/admin/dlq",
       icon: Database,
-      items: [
-        {
-          title: "Failed Deliveries",
-          url: "/admin/dlq",
-        },
-        {
-          title: "Replay Queue",
-          url: "/admin/dlq/replay",
-        },
-      ],
     },
     {
       title: "Sandbox Management",
       url: "/admin/sandbox",
       icon: Users,
-      items: [
-        {
-          title: "Active Sandboxes",
-          url: "/admin/sandbox",
-        },
-        {
-          title: "Create Sandbox",
-          url: "/admin/sandbox/create",
-        },
-      ],
     },
     {
       title: "Billing & Usage",
       url: "/admin/billing",
       icon: CreditCard,
-      items: [
-        {
-          title: "Tenant Usage",
-          url: "/admin/billing",
-        },
-        {
-          title: "Invoices",
-          url: "/admin/billing/invoices",
-        },
-        {
-          title: "Reports",
-          url: "/admin/billing/reports",
-        },
-      ],
     },
     {
       title: "Webhooks",

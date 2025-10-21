@@ -8,8 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Plus, Webhook, Settings, Trash2, TestTube, CheckCircle, XCircle } from "lucide-react"
 import { useState } from "react"
 
@@ -100,7 +98,7 @@ export default function WebhooksManagement() {
     setIsCreateDialogOpen(false)
   }
 
-  const handleTestWebhook = async (id: string) => {
+  const handleTestWebhook = async () => {
     // Simulate webhook test
     await new Promise(resolve => setTimeout(resolve, 1000))
     // In real app, this would send a test event
@@ -322,7 +320,7 @@ export default function WebhooksManagement() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleTestWebhook(webhook.id)}>
+                      <Button variant="outline" size="sm" onClick={() => handleTestWebhook()}>
                         <TestTube className="h-3 w-3" />
                       </Button>
 
