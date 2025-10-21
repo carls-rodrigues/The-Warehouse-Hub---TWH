@@ -136,7 +136,7 @@ pub async fn adjust_stock(
     Json(request): Json<StockAdjustmentRequest>,
 ) -> Result<Json<AdjustStockResponse>, (StatusCode, Json<ErrorResponse>)> {
     // TODO: Get user ID from authentication context
-    let created_by = None; // For now, no authentication
+    let created_by = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(); // Use existing test user
 
     match state
         .adjust_stock_use_case

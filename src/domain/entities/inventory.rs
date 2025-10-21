@@ -221,10 +221,56 @@ pub struct StockLevelResponse {
     pub location: Option<Location>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AdjustmentReason {
+    Count,
+    Damage,
+    Correction,
+    Other,
+}
+
+impl AdjustmentReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AdjustmentReason::Count => "COUNT",
+            AdjustmentReason::Damage => "DAMAGE",
+            AdjustmentReason::Correction => "CORRECTION",
+            AdjustmentReason::Other => "OTHER",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, DomainError> {
+        match s.to_uppercase().as_str() {
+            "COUNT" => Ok(AdjustmentReason::Count),
+            "DAMAGE" => Ok(AdjustmentReason::Damage),
+            "CORRECTION" => Ok(AdjustmentReason::Correction),
+            "OTHER" => Ok(AdjustmentReason::Other),
+            _ => Err(DomainError::ValidationError(format!(
+                "Invalid adjustment reason: {}. Must be one of: COUNT, DAMAGE, CORRECTION, OTHER",
+                s
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Adjustment {
+    pub id: Uuid,
+    pub item_id: Uuid,
+    pub location_id: Uuid,
+    pub qty_change: i32,
+    pub reason: AdjustmentReason,
+    pub note: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StockAdjustmentRequest {
     pub item_id: Uuid,
     pub location_id: Uuid,
-    pub quantity: i32,
-    pub reason: String,
+    pub qty_change: i32,
+    pub reason: AdjustmentReason,
+    pub note: Option<String>,
 }

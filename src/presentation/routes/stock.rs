@@ -16,5 +16,6 @@ pub fn create_stock_routes() -> Router<AppState> {
         .route("/stock/items/{item_id}", get(get_item_stock_levels))
         .route("/stock/movements", get(get_stock_movements))
         .route("/stock/adjust", post(adjust_stock))
+        .route("/adjustments", post(adjust_stock))
         .layer(CorsLayer::permissive())
 }
