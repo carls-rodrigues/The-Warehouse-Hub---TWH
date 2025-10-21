@@ -22,10 +22,12 @@ use crate::application::use_cases::{
     ship_sales_order::ShipSalesOrderUseCase, ship_transfer::ShipTransferUseCase,
     update_item::UpdateItemUseCase, update_location::UpdateLocationUseCase,
 };
+use crate::domain::services::export_service::{ExportService, ExportServiceImpl};
 use crate::domain::services::webhook_dispatcher::{WebhookDispatcher, WebhookDispatcherImpl};
 use crate::infrastructure::controllers::{
     auth_controller::login_handler, items_controller::*, locations_controller::*,
 };
+use crate::infrastructure::http::routes::export_routes;
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_job_repository::PostgresJobRepository,
@@ -176,6 +178,7 @@ pub struct AppState {
     pub job_service: Arc<JobServiceImpl<PostgresJobRepository>>,
     pub enqueue_job_use_case: Arc<EnqueueJobUseCase<JobServiceImpl<PostgresJobRepository>>>,
     pub get_job_status_use_case: Arc<GetJobStatusUseCase<JobServiceImpl<PostgresJobRepository>>>,
+    pub export_service: Arc<ExportServiceImpl<JobServiceImpl<PostgresJobRepository>>>,
 }
 #[derive(Serialize)]
 struct HealthResponse {
@@ -331,6 +334,9 @@ async fn main() {
     let enqueue_job_use_case = Arc::new(EnqueueJobUseCase::new(Arc::clone(&job_service)));
     let get_job_status_use_case = Arc::new(GetJobStatusUseCase::new(Arc::clone(&job_service)));
 
+    // Initialize export service
+    let export_service = Arc::new(ExportServiceImpl::new(Arc::clone(&job_service)));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         user_repository: Arc::clone(&user_repository),
@@ -378,6 +384,7 @@ async fn main() {
         job_service: Arc::clone(&job_service),
         enqueue_job_use_case: Arc::clone(&enqueue_job_use_case),
         get_job_status_use_case: Arc::clone(&get_job_status_use_case),
+        export_service: Arc::clone(&export_service),
     };
 
     // Build the application with routes
@@ -403,6 +410,7 @@ async fn main() {
         .merge(transfer_routes())
         .merge(return_routes())
         .merge(create_webhook_routes())
+        .merge(export_routes::create_exports_router())
         .with_state(app_state);
 
     // Run the server

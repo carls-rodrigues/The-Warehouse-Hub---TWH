@@ -1,4 +1,5 @@
 // Domain services will be implemented here
+pub mod export_service;
 pub mod idempotency_repository;
 pub mod item_repository;
 pub mod job_processor;
