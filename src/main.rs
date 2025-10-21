@@ -5,18 +5,19 @@ mod presentation;
 mod shared;
 
 use crate::application::use_cases::{
-    adjust_stock::AdjustStockUseCase, create_item::CreateItemUseCase,
-    create_location::CreateLocationUseCase, create_purchase_order::CreatePurchaseOrderUseCase,
-    create_return::CreateReturnUseCase, create_sales_order::CreateSalesOrderUseCase,
+    adjust_stock::AdjustStockUseCase, cleanup_expired_sandboxes::CleanupExpiredSandboxesUseCase,
+    create_item::CreateItemUseCase, create_location::CreateLocationUseCase,
+    create_purchase_order::CreatePurchaseOrderUseCase, create_return::CreateReturnUseCase,
+    create_sales_order::CreateSalesOrderUseCase, create_tenant::CreateTenantUseCase,
     create_transfer::CreateTransferUseCase, delete_item::DeleteItemUseCase,
-    delete_location::DeleteLocationUseCase, enqueue_job::EnqueueJobUseCase,
-    get_item::GetItemUseCase, get_job_status::GetJobStatusUseCase,
+    delete_location::DeleteLocationUseCase, delete_tenant::DeleteTenantUseCase,
+    enqueue_job::EnqueueJobUseCase, get_item::GetItemUseCase, get_job_status::GetJobStatusUseCase,
     get_location::GetLocationUseCase, get_low_stock_report::GetLowStockReportUseCase,
     get_purchase_order::GetPurchaseOrderUseCase, get_return::GetReturnUseCase,
     get_stock_level::GetStockLevelUseCase, get_stock_movements::GetStockMovementsUseCase,
-    get_stock_valuation_report::GetStockValuationReportUseCase,
+    get_stock_valuation_report::GetStockValuationReportUseCase, get_tenant::GetTenantUseCase,
     list_item_stock_levels::ListItemStockLevelsUseCase, list_items::ListItemsUseCase,
-    list_locations::ListLocationsUseCase, login::LoginUseCase,
+    list_locations::ListLocationsUseCase, list_tenants::ListTenantsUseCase, login::LoginUseCase,
     process_return::ProcessReturnUseCase, receive_purchase_order::ReceivePurchaseOrderUseCase,
     receive_transfer::ReceiveTransferUseCase, search_use_case::SearchUseCaseImpl,
     ship_sales_order::ShipSalesOrderUseCase, ship_transfer::ShipTransferUseCase,
@@ -38,6 +39,7 @@ use crate::infrastructure::repositories::{
     postgres_sales_order_repository::PostgresSalesOrderRepository,
     postgres_search_repository::PostgresSearchRepository,
     postgres_stock_repository::PostgresStockRepository,
+    postgres_tenant_repository::PostgresTenantRepository,
     postgres_transfer_repository::PostgresTransferRepository,
     postgres_user_repository::PostgresUserRepository,
     postgres_webhook_repository::PostgresWebhookRepository,
@@ -48,7 +50,7 @@ use crate::infrastructure::services::{
 use crate::presentation::routes::{
     create_jobs_routes, create_purchase_order_routes, create_reports_routes, create_stock_routes,
     create_webhook_routes, returns::return_routes, sales_order::sales_order_routes,
-    search::create_search_routes, transfer::transfer_routes,
+    search::create_search_routes, tenant::tenant_routes, transfer::transfer_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -70,6 +72,7 @@ pub struct AppState {
     pub transfer_repository: Arc<PostgresTransferRepository>,
     pub stock_repository: Arc<PostgresStockRepository>,
     pub search_repository: Arc<PostgresSearchRepository>,
+    pub tenant_repository: Arc<PostgresTenantRepository>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
     pub create_item_use_case: Arc<CreateItemUseCase<PostgresItemRepository>>,
     pub get_item_use_case: Arc<GetItemUseCase<PostgresItemRepository>>,
@@ -184,6 +187,12 @@ pub struct AppState {
             WebhookDispatcherImpl<PostgresWebhookRepository>,
         >,
     >,
+    pub create_tenant_use_case: Arc<CreateTenantUseCase<PostgresTenantRepository>>,
+    pub get_tenant_use_case: Arc<GetTenantUseCase<PostgresTenantRepository>>,
+    pub list_tenants_use_case: Arc<ListTenantsUseCase<PostgresTenantRepository>>,
+    pub delete_tenant_use_case: Arc<DeleteTenantUseCase<PostgresTenantRepository>>,
+    pub cleanup_expired_sandboxes_use_case:
+        Arc<CleanupExpiredSandboxesUseCase<PostgresTenantRepository>>,
     pub report_service: Arc<ReportServiceImpl<PostgresItemRepository, PostgresStockRepository>>,
     pub get_low_stock_report_use_case: Arc<
         GetLowStockReportUseCase<
@@ -236,6 +245,7 @@ async fn main() {
     let transfer_repository = Arc::new(PostgresTransferRepository::new(Arc::clone(&pool)));
     let search_repository = Arc::new(PostgresSearchRepository::new(Arc::clone(&pool)));
     let stock_repository = Arc::new(PostgresStockRepository::new(Arc::clone(&pool)));
+    let tenant_repository = Arc::new(PostgresTenantRepository::new((*pool).clone()));
 
     let webhook_repository = Arc::new(PostgresWebhookRepository::new(Arc::clone(&pool)));
     let webhook_dispatcher = Arc::new(WebhookDispatcherImpl::new(Arc::clone(&webhook_repository)));
@@ -258,6 +268,15 @@ async fn main() {
             Arc::clone(&webhook_repository),
         ),
     );
+
+    // Initialize tenant use cases
+    let create_tenant_use_case = Arc::new(CreateTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let get_tenant_use_case = Arc::new(GetTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let list_tenants_use_case = Arc::new(ListTenantsUseCase::new(Arc::clone(&tenant_repository)));
+    let delete_tenant_use_case = Arc::new(DeleteTenantUseCase::new(Arc::clone(&tenant_repository)));
+    let cleanup_expired_sandboxes_use_case = Arc::new(CleanupExpiredSandboxesUseCase::new(
+        Arc::clone(&tenant_repository),
+    ));
 
     // Get JWT configuration from environment
     let jwt_secret = env::var("JWT_SECRET")
@@ -390,6 +409,7 @@ async fn main() {
         transfer_repository: Arc::clone(&transfer_repository),
         stock_repository: Arc::clone(&stock_repository),
         search_repository: Arc::clone(&search_repository),
+        tenant_repository: Arc::clone(&tenant_repository),
         login_use_case,
         create_item_use_case,
         get_item_use_case,
@@ -423,6 +443,11 @@ async fn main() {
         get_webhook_delivery_details_use_case: Arc::clone(&get_webhook_delivery_details_use_case),
         test_webhook_use_case: Arc::clone(&test_webhook_use_case),
         retry_webhook_delivery_use_case: Arc::clone(&retry_webhook_delivery_use_case),
+        create_tenant_use_case: Arc::clone(&create_tenant_use_case),
+        get_tenant_use_case: Arc::clone(&get_tenant_use_case),
+        list_tenants_use_case: Arc::clone(&list_tenants_use_case),
+        delete_tenant_use_case: Arc::clone(&delete_tenant_use_case),
+        cleanup_expired_sandboxes_use_case: Arc::clone(&cleanup_expired_sandboxes_use_case),
         report_service,
         get_low_stock_report_use_case,
         get_stock_valuation_report_use_case,
@@ -456,6 +481,7 @@ async fn main() {
         .merge(transfer_routes())
         .merge(return_routes())
         .merge(create_webhook_routes())
+        .merge(tenant_routes())
         .merge(export_routes::create_exports_router())
         .with_state(app_state);
 

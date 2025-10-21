@@ -6,6 +6,7 @@ pub mod returns;
 pub mod sales_order;
 pub mod search;
 pub mod stock;
+pub mod tenant;
 pub mod transfer;
 pub mod webhook;
 pub mod webhook_deliveries;

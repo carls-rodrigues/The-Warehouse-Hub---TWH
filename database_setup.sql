@@ -22,6 +22,25 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_active ON users(active);
 
+-- Tenants table for multi-tenancy
+CREATE TABLE IF NOT EXISTS tenants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    tenant_type VARCHAR(50) NOT NULL CHECK (tenant_type IN ('PRODUCTION', 'SANDBOX')),
+    status VARCHAR(50) NOT NULL DEFAULT 'PROVISIONING' CHECK (status IN ('PROVISIONING', 'ACTIVE', 'SUSPENDED', 'DELETING')),
+    database_schema VARCHAR(100) NOT NULL UNIQUE,
+    created_by UUID REFERENCES users(id),
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for tenants
+CREATE INDEX IF NOT EXISTS idx_tenants_tenant_type ON tenants(tenant_type);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenants_database_schema ON tenants(database_schema);
+CREATE INDEX IF NOT EXISTS idx_tenants_expires_at ON tenants(expires_at);
+
 -- Items table for inventory management
 CREATE TABLE IF NOT EXISTS items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -404,21 +423,50 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 CREATE INDEX IF NOT EXISTS idx_webhook_events_event_type ON webhook_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
 
--- Webhook deliveries table for tracking delivery attempts
+-- Webhook deliveries table for storing webhook delivery attempts
 CREATE TABLE IF NOT EXISTS webhook_deliveries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     webhook_id UUID NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
     event_id UUID NOT NULL REFERENCES webhook_events(id) ON DELETE CASCADE,
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'TIMEOUT', 'DLQ')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'RETRY')),
     attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
-    last_attempt_at TIMESTAMPTZ,
-    next_attempt_at TIMESTAMPTZ,
     response_status INTEGER,
     response_body TEXT,
     error_message TEXT,
+    next_retry_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Create indexes for webhook deliveries
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_event_id ON webhook_deliveries(event_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_next_retry ON webhook_deliveries(next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(created_at);
+
+-- Tenants table for multi-tenancy support
+CREATE TABLE IF NOT EXISTS tenants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    tenant_type VARCHAR(20) NOT NULL CHECK (tenant_type IN ('SANDBOX', 'PRODUCTION')),
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'SUSPENDED', 'DELETING', 'DELETED')),
+    database_schema VARCHAR(255) NOT NULL UNIQUE,
+    created_by UUID NOT NULL REFERENCES users(id),
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for tenants
+CREATE INDEX IF NOT EXISTS idx_tenants_name ON tenants(name);
+CREATE INDEX IF NOT EXISTS idx_tenants_tenant_type ON tenants(tenant_type);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+CREATE INDEX IF NOT EXISTS idx_tenants_created_by ON tenants(created_by);
+CREATE INDEX IF NOT EXISTS idx_tenants_expires_at ON tenants(expires_at);
+CREATE INDEX IF NOT EXISTS idx_tenants_created_at ON tenants(created_at);
+
+-- Jobs table for async job processing
 
 -- Create indexes for webhook deliveries
 CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id);

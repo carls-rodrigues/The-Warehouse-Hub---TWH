@@ -24,3 +24,9 @@ impl std::fmt::Display for DomainError {
 }
 
 impl std::error::Error for DomainError {}
+
+impl From<sqlx::Error> for DomainError {
+    fn from(error: sqlx::Error) -> Self {
+        DomainError::DatabaseError(error.to_string())
+    }
+}

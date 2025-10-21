@@ -13,6 +13,7 @@ pub mod sales_order_repository;
 pub mod search_projection;
 pub mod search_repository;
 pub mod stock_repository;
+pub mod tenant_repository;
 pub mod transfer_repository;
 pub mod user_repository;
 pub mod webhook_dispatcher;
