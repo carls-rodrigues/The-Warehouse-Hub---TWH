@@ -8,6 +8,16 @@ use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::sync::Arc;
+use uuid::Uuid;
+
+use crate::domain::entities::tenant::TenantTier;
+use crate::domain::services::tenant_repository::TenantRepository;
+
+#[derive(Debug, Clone)]
+pub struct TenantContext {
+    pub tenant_id: Uuid,
+    pub tier: TenantTier,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -22,14 +32,23 @@ struct Claims {
 pub struct TenantMiddleware {
     pool: Arc<PgPool>,
     jwt_secret: String,
+    tenant_repository: Arc<dyn TenantRepository>,
 }
 
 impl TenantMiddleware {
-    pub fn new(pool: Arc<PgPool>, jwt_secret: String) -> Self {
-        Self { pool, jwt_secret }
+    pub fn new(
+        pool: Arc<PgPool>,
+        jwt_secret: String,
+        tenant_repository: Arc<dyn TenantRepository>,
+    ) -> Self {
+        Self {
+            pool,
+            jwt_secret,
+            tenant_repository,
+        }
     }
 
-    pub async fn handle(self, headers: HeaderMap, mut request: Request, next: Next) -> Response {
+    pub async fn handle(&self, headers: HeaderMap, mut request: Request, next: Next) -> Response {
         // Extract tenant_id from JWT token
         let tenant_id = match self.extract_tenant_from_token(&headers).await {
             Ok(tenant_id) => tenant_id,
@@ -41,14 +60,19 @@ impl TenantMiddleware {
         };
 
         if let Some(tenant_id) = tenant_id {
-            // Set tenant context in the database connection
-            // Note: In a real implementation, you'd want to use a connection pool that supports
-            // per-request tenant context, or modify the repositories to accept tenant_id as a parameter.
-            // For now, we'll set a session variable that RLS policies can use.
+            // Look up tenant tier from database
+            let tier = match self.tenant_repository.get_tenant_tier(tenant_id).await {
+                Ok(Some(tier)) => tier,
+                _ => {
+                    // If tenant not found or error, default to FREE tier
+                    TenantTier::Free
+                }
+            };
 
-            // Since we can't easily modify the connection for each request with the current architecture,
-            // we'll store the tenant_id in request extensions for the handlers to use
-            request.extensions_mut().insert(tenant_id);
+            let tenant_context = TenantContext { tenant_id, tier };
+
+            // Store tenant context in request extensions for use by other middleware and handlers
+            request.extensions_mut().insert(tenant_context);
         }
 
         next.run(request).await

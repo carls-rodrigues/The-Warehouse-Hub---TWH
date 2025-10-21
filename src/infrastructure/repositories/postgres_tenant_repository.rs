@@ -198,4 +198,27 @@ impl TenantRepository for PostgresTenantRepository {
 
         Ok(())
     }
+
+    async fn get_tenant_tier(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Option<crate::domain::entities::tenant::TenantTier>, DomainError> {
+        let row = sqlx::query(
+            r#"
+            SELECT tier FROM tenants WHERE id = $1
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| DomainError::DatabaseError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let tier_str: String = row.try_get("tier")?;
+            let tier = crate::domain::entities::tenant::TenantTier::from_str(&tier_str)?;
+            Ok(Some(tier))
+        } else {
+            Ok(None)
+        }
+    }
 }

@@ -26,4 +26,10 @@ pub trait TenantRepository: Send + Sync {
 
     /// Permanently delete tenant data (for cleanup jobs)
     async fn permanently_delete_tenant(&self, tenant_id: Uuid) -> Result<(), DomainError>;
+
+    /// Get tenant tier by ID (for rate limiting)
+    async fn get_tenant_tier(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Option<crate::domain::entities::tenant::TenantTier>, DomainError>;
 }

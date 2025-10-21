@@ -32,6 +32,10 @@ use crate::infrastructure::controllers::{
 };
 use crate::infrastructure::http::routes::export_routes;
 use crate::infrastructure::middleware::rate_limit_middleware::RateLimitMiddleware;
+use crate::infrastructure::middleware::tenant_middleware::TenantMiddleware;
+use crate::infrastructure::observability::{
+    init_observability, metrics::AppMetrics, tracing_middleware,
+};
 use crate::infrastructure::repositories::{
     postgres_item_repository::PostgresItemRepository,
     postgres_job_repository::PostgresJobRepository,
@@ -78,6 +82,8 @@ pub struct AppState {
     pub search_repository: Arc<PostgresSearchRepository>,
     pub tenant_repository: Arc<PostgresTenantRepository>,
     pub rate_limit_middleware: Arc<RateLimitMiddleware>,
+    pub tenant_middleware:
+        Arc<crate::infrastructure::middleware::tenant_middleware::TenantMiddleware>,
     pub login_use_case: Arc<LoginUseCase<PostgresUserRepository>>,
     pub create_item_use_case: Arc<CreateItemUseCase<PostgresItemRepository>>,
     pub get_item_use_case: Arc<GetItemUseCase<PostgresItemRepository>>,
@@ -249,6 +255,15 @@ struct HealthResponse {
 
 #[tokio::main]
 async fn main() {
+    // Initialize OpenTelemetry observability
+    if let Err(e) = init_observability() {
+        eprintln!("Failed to initialize OpenTelemetry: {:?}", e);
+        // Continue without observability rather than failing
+    }
+
+    // Initialize application metrics
+    let _metrics = AppMetrics::init();
+
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
@@ -332,7 +347,7 @@ async fn main() {
 
     let login_use_case = Arc::new(LoginUseCase::new(
         Arc::clone(&user_repository),
-        jwt_secret,
+        jwt_secret.clone(),
         jwt_expiry_hours,
     ));
 
@@ -461,6 +476,16 @@ async fn main() {
         RateLimitMiddleware::new(&redis_url).expect("Failed to create rate limit middleware"),
     );
 
+    // Initialize tenant middleware
+    let jwt_secret = env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string());
+    let tenant_middleware = Arc::new(TenantMiddleware::new(
+        Arc::clone(&pool),
+        jwt_secret,
+        Arc::clone(&tenant_repository)
+            as Arc<dyn crate::domain::services::tenant_repository::TenantRepository>,
+    ));
+
     let app_state = AppState {
         pool: Arc::clone(&pool),
         user_repository: Arc::clone(&user_repository),
@@ -474,6 +499,7 @@ async fn main() {
         search_repository: Arc::clone(&search_repository),
         tenant_repository: Arc::clone(&tenant_repository),
         rate_limit_middleware: Arc::clone(&rate_limit_middleware),
+        tenant_middleware: Arc::clone(&tenant_middleware),
         login_use_case,
         create_item_use_case,
         get_item_use_case,
@@ -552,6 +578,18 @@ async fn main() {
         .merge(tenant_routes())
         .merge(create_admin_router())
         .merge(export_routes::create_exports_router())
+        .layer(axum::middleware::from_fn(
+            tracing_middleware::tracing_middleware,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&tenant_middleware),
+            |state: axum::extract::State<
+                Arc<crate::infrastructure::middleware::tenant_middleware::TenantMiddleware>,
+            >,
+             headers,
+             request,
+             next| async move { state.handle(headers, request, next).await },
+        ))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&rate_limit_middleware),
             crate::infrastructure::middleware::rate_limit_middleware::rate_limit_middleware,

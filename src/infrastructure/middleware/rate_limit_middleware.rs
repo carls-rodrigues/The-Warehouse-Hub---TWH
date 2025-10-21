@@ -6,30 +6,10 @@ use axum::{
 };
 use redis::AsyncCommands;
 use std::sync::Arc;
-use uuid::Uuid;
 
-#[derive(Clone, Debug)]
-pub enum TenantTier {
-    Free,
-    Developer,
-    Startup,
-    Growth,
-    Scale,
-    Enterprise,
-}
-
-impl TenantTier {
-    pub fn requests_per_minute(&self) -> u32 {
-        match self {
-            TenantTier::Free => 10,      // 10k/month = ~10/minute (generous for sandbox)
-            TenantTier::Developer => 50, // 100k/month = ~50/minute
-            TenantTier::Startup => 200,  // 500k/month = ~200/minute
-            TenantTier::Growth => 800,   // 2M/month = ~800/minute
-            TenantTier::Scale => 4000,   // 10M/month = ~4000/minute
-            TenantTier::Enterprise => 10000, // Custom high limit for enterprise
-        }
-    }
-}
+use crate::domain::entities::tenant::TenantTier;
+use crate::infrastructure::middleware::tenant_middleware::TenantContext;
+use crate::infrastructure::observability::metrics::AppMetrics;
 
 #[derive(Clone)]
 pub struct RateLimitMiddleware {
@@ -45,19 +25,36 @@ impl RateLimitMiddleware {
     }
 
     pub async fn handle(self, headers: HeaderMap, request: Request, next: Next) -> Response {
-        // For now, use default tier. In production, this would come from tenant lookup
-        let tenant_tier = TenantTier::Free; // Default to free tier
+        // Extract tenant context from request extensions
+        let tenant_context = request.extensions().get::<TenantContext>();
+
+        let tenant_tier = match tenant_context {
+            Some(ctx) => ctx.tier.clone(),
+            None => {
+                // No tenant context found, default to FREE tier
+                TenantTier::Free
+            }
+        };
 
         // Get the endpoint path
         let path = request.uri().path();
 
         // Check rate limit
         match self.check_rate_limit(&tenant_tier, path).await {
-            Ok(true) => {
+            Ok((true, remaining, reset_time)) => {
                 // Rate limit passed, continue with request
-                next.run(request).await
+                let mut response = next.run(request).await;
+                // Add rate limit headers
+                response.headers_mut().insert(
+                    "X-RateLimit-Remaining",
+                    remaining.to_string().parse().unwrap(),
+                );
+                response
+                    .headers_mut()
+                    .insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
+                response
             }
-            Ok(false) => {
+            Ok((false, remaining, reset_time)) => {
                 // Rate limit exceeded
                 let mut response = (
                     StatusCode::TOO_MANY_REQUESTS,
@@ -68,6 +65,13 @@ impl RateLimitMiddleware {
                     "Retry-After",
                     "60".parse().unwrap(), // Retry after 60 seconds
                 );
+                response.headers_mut().insert(
+                    "X-RateLimit-Remaining",
+                    remaining.to_string().parse().unwrap(),
+                );
+                response
+                    .headers_mut()
+                    .insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
                 response
             }
             Err(_) => {
@@ -81,7 +85,7 @@ impl RateLimitMiddleware {
         &self,
         tenant_tier: &TenantTier,
         endpoint: &str,
-    ) -> Result<bool, redis::RedisError> {
+    ) -> Result<(bool, i64, i64), redis::RedisError> {
         let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
 
         // Create a key for this tenant tier and endpoint
@@ -101,8 +105,11 @@ impl RateLimitMiddleware {
 
         // Check if limit exceeded based on tenant tier
         let limit = tenant_tier.requests_per_minute() as i64;
+        let remaining = limit - current_count;
+        let reset_time = now + 60; // Reset in 60 seconds
+
         if current_count >= limit {
-            return Ok(false);
+            return Ok((false, remaining, reset_time));
         }
 
         // Add current request with unique member
@@ -112,7 +119,7 @@ impl RateLimitMiddleware {
         // Set expiration on the key (cleanup after window + buffer)
         let _: () = conn.expire(&key, 120).await?; // 2 minutes
 
-        Ok(true)
+        Ok((true, remaining - 1, reset_time)) // remaining - 1 because we just added one
     }
 }
 
@@ -122,20 +129,42 @@ pub async fn rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    // For now, use default tier. In production, this would come from tenant lookup
-    let tenant_tier = TenantTier::Free; // Default to free tier
+    // Extract tenant context from request extensions
+    let tenant_context = request.extensions().get::<TenantContext>();
+
+    let tenant_tier = match tenant_context {
+        Some(ctx) => ctx.tier.clone(),
+        None => {
+            // No tenant context found, default to FREE tier
+            TenantTier::Free
+        }
+    };
 
     // Get the endpoint path
     let path = request.uri().path();
 
     // Check rate limit
     match state.check_rate_limit(&tenant_tier, path).await {
-        Ok(true) => {
+        Ok((true, remaining, reset_time)) => {
             // Rate limit passed, continue with request
-            next.run(request).await
+            let mut response = next.run(request).await;
+            // Add rate limit headers
+            response.headers_mut().insert(
+                "X-RateLimit-Remaining",
+                remaining.to_string().parse().unwrap(),
+            );
+            response
+                .headers_mut()
+                .insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
+            response
         }
-        Ok(false) => {
-            // Rate limit exceeded
+        Ok((false, remaining, reset_time)) => {
+            // Rate limit exceeded - record metrics
+            if let Some(ctx) = tenant_context {
+                AppMetrics::get()
+                    .record_rate_limit_hit(&ctx.tenant_id.to_string(), &format!("{:?}", ctx.tier));
+            }
+
             let mut response = (
                 StatusCode::TOO_MANY_REQUESTS,
                 "Rate limit exceeded. Please try again later.",
@@ -145,6 +174,13 @@ pub async fn rate_limit_middleware(
                 "Retry-After",
                 "60".parse().unwrap(), // Retry after 60 seconds
             );
+            response.headers_mut().insert(
+                "X-RateLimit-Remaining",
+                remaining.to_string().parse().unwrap(),
+            );
+            response
+                .headers_mut()
+                .insert("X-RateLimit-Reset", reset_time.to_string().parse().unwrap());
             response
         }
         Err(_) => {
