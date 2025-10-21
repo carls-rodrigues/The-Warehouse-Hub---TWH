@@ -582,6 +582,23 @@ impl WebhookRepository for PostgresWebhookRepository {
         Ok(row.count.unwrap_or(0))
     }
 
+    async fn count_dlq_deliveries(&self) -> Result<i64, DomainError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT COUNT(*) as count
+            FROM webhook_deliveries
+            WHERE status = 'DLQ'
+            "#,
+        )
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| {
+            DomainError::DatabaseError(format!("Failed to count DLQ deliveries: {}", e))
+        })?;
+
+        Ok(row.count.unwrap_or(0))
+    }
+
     async fn cleanup_old_data(&self, days_old: i32) -> Result<(), DomainError> {
         // Clean up old events (keep last 30 days)
         sqlx::query!(
@@ -610,5 +627,9 @@ impl WebhookRepository for PostgresWebhookRepository {
         })?;
 
         Ok(())
+    }
+
+    fn get_pool(&self) -> &sqlx::PgPool {
+        &self.pool
     }
 }

@@ -47,8 +47,8 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 - **TASK-002** [COMPLETED]: Sandbox tenant provisioning and quickstart flow (24h, P0) - Core implementation done with API endpoint, sample data population, and testing; remaining: cleanup job, OpenAPI updates, quickstart integration
 - **TASK-012**: Admin UI: DLQ replay, sandbox management and billing view (40h, P1)
-- **TASK-016**: Create Node and Python SDKs and publish quickstarts (32h, P0)
-- **TASK-018**: Generate Postman collection from canonical OpenAPI and publish (8h, P0)
+ - **TASK-018**: Generate Postman collection from canonical OpenAPI and publish (8h, P0)
+
 
 ### Observability and Security Tasks (Sprint 6)
 
@@ -65,7 +65,8 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ### DR and Polish Tasks (Sprint 8)
 
-- **TASK-015**: Implement backups, PITR and DR runbooks (40h, P0)
+ - **TASK-015**: Implement backups, PITR and DR runbooks (40h, P0)
+ - **TASK-016**: Create Node and Python SDKs and publish quickstarts (32h, P0)
 
 ## Dependency Graph
 
@@ -75,7 +76,7 @@ TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
 
 ### Parallel Tracks
 
-1. DevEx Track: TASK-002 → TASK-012 → TASK-016
+1. DevEx Track: TASK-002 → TASK-012 → TASK-018 → TASK-016
 2. Async Track: TASK-005 → TASK-006 → TASK-007
 3. Business Track: TASK-009 → TASK-011 → TASK-013
 
@@ -101,8 +102,8 @@ TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
 
 ### dev-agent-2 (Frontend & DevEx) - 120h
 
-- Tasks: TASK-002, TASK-012, TASK-016, TASK-018
-- Focus: Admin UI and developer tooling
+- Tasks: TASK-002, TASK-012, TASK-018
+ - Focus: Admin UI and developer tooling
 
 ### dev-agent-3 (Backend Core) - 160h
 

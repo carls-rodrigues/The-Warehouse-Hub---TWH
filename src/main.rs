@@ -49,9 +49,10 @@ use crate::infrastructure::services::{
     job_service_impl::JobServiceImpl, report_service_impl::ReportServiceImpl,
 };
 use crate::presentation::routes::{
-    create_jobs_routes, create_purchase_order_routes, create_reports_routes, create_stock_routes,
-    create_webhook_routes, returns::return_routes, sales_order::sales_order_routes,
-    search::create_search_routes, tenant::tenant_routes, transfer::transfer_routes,
+    create_admin_router, create_jobs_routes, create_purchase_order_routes, create_reports_routes,
+    create_stock_routes, create_webhook_routes, returns::return_routes,
+    sales_order::sales_order_routes, search::create_search_routes, tenant::tenant_routes,
+    transfer::transfer_routes,
 };
 use axum::{
     routing::{delete, get, post, put},
@@ -188,6 +189,22 @@ pub struct AppState {
             WebhookDispatcherImpl<PostgresWebhookRepository>,
         >,
     >,
+    pub list_dlq_deliveries_use_case: Arc<
+        crate::application::use_cases::list_dlq_deliveries::ListDlqDeliveriesUseCase<
+            PostgresWebhookRepository,
+        >,
+    >,
+    pub replay_dlq_delivery_use_case: Arc<
+        crate::application::use_cases::replay_dlq_delivery::ReplayDlqDeliveryUseCase<
+            PostgresWebhookRepository,
+            WebhookDispatcherImpl<PostgresWebhookRepository>,
+        >,
+    >,
+    pub get_billing_metrics_use_case: Arc<
+        crate::application::use_cases::get_billing_metrics::GetBillingMetricsUseCase<
+            PostgresWebhookRepository,
+        >,
+    >,
     pub create_tenant_use_case: Arc<CreateTenantUseCase<PostgresTenantRepository>>,
     pub create_sandbox_tenant_use_case: Arc<
         CreateSandboxTenantUseCase<
@@ -273,6 +290,22 @@ async fn main() {
     let retry_webhook_delivery_use_case = Arc::new(
         crate::application::use_cases::retry_webhook_delivery::RetryWebhookDeliveryUseCase::new(
             Arc::clone(&webhook_dispatcher),
+            Arc::clone(&webhook_repository),
+        ),
+    );
+    let list_dlq_deliveries_use_case = Arc::new(
+        crate::application::use_cases::list_dlq_deliveries::ListDlqDeliveriesUseCase::new(
+            Arc::clone(&webhook_repository),
+        ),
+    );
+    let replay_dlq_delivery_use_case = Arc::new(
+        crate::application::use_cases::replay_dlq_delivery::ReplayDlqDeliveryUseCase::new(
+            Arc::clone(&webhook_dispatcher),
+            Arc::clone(&webhook_repository),
+        ),
+    );
+    let get_billing_metrics_use_case = Arc::new(
+        crate::application::use_cases::get_billing_metrics::GetBillingMetricsUseCase::new(
             Arc::clone(&webhook_repository),
         ),
     );
@@ -464,6 +497,9 @@ async fn main() {
         get_webhook_delivery_details_use_case: Arc::clone(&get_webhook_delivery_details_use_case),
         test_webhook_use_case: Arc::clone(&test_webhook_use_case),
         retry_webhook_delivery_use_case: Arc::clone(&retry_webhook_delivery_use_case),
+        list_dlq_deliveries_use_case: Arc::clone(&list_dlq_deliveries_use_case),
+        replay_dlq_delivery_use_case: Arc::clone(&replay_dlq_delivery_use_case),
+        get_billing_metrics_use_case: Arc::clone(&get_billing_metrics_use_case),
         create_tenant_use_case: Arc::clone(&create_tenant_use_case),
         create_sandbox_tenant_use_case: Arc::clone(&create_sandbox_tenant_use_case),
         get_tenant_use_case: Arc::clone(&get_tenant_use_case),
@@ -504,6 +540,7 @@ async fn main() {
         .merge(return_routes())
         .merge(create_webhook_routes())
         .merge(tenant_routes())
+        .merge(create_admin_router())
         .merge(export_routes::create_exports_router())
         .with_state(app_state);
 

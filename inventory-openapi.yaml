@@ -129,14 +129,98 @@ components:
         status: { $ref: '#/components/schemas/TenantStatus' }
         created_at: { $ref: '#/components/schemas/Timestamp' }
         expires_at: { $ref: '#/components/schemas/Timestamp' }
-    PagingMeta:
+    AdminDashboardResponse:
       type: object
+      required: [total_tenants, active_sandboxes, expired_sandboxes, total_webhook_deliveries, failed_webhook_deliveries]
       properties:
-        page: { type: integer }
-        per_page: { type: integer }
-        total: { type: integer }
-        total_pages: { type: integer }
-    CursorMeta:
+        total_tenants: { type: integer, description: Total number of tenants }
+        active_sandboxes: { type: integer, description: Number of active sandbox tenants }
+        expired_sandboxes: { type: integer, description: Number of expired sandbox tenants }
+        total_webhook_deliveries: { type: integer, description: Total webhook deliveries across all tenants }
+        failed_webhook_deliveries: { type: integer, description: Number of failed webhook deliveries }
+    SandboxTenant:
+      type: object
+      required: [id, name, status, created_at, expires_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        name: { type: string, description: Name of the sandbox tenant }
+        status: { $ref: '#/components/schemas/TenantStatus' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+    ListSandboxesResponse:
+      type: object
+      required: [sandboxes]
+      properties:
+        sandboxes:
+          type: array
+          items: { $ref: '#/components/schemas/SandboxTenant' }
+    CleanupResponse:
+      type: object
+      required: [cleaned_tenant_ids, message]
+      properties:
+        cleaned_tenant_ids:
+          type: array
+          items: { $ref: '#/components/schemas/UUID' }
+          description: IDs of tenants that were cleaned up
+        message: { type: string, description: Human-readable summary of the cleanup operation }
+    DlqDelivery:
+      type: object
+      required: [id, webhook_id, event_id, status, attempt_count, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/UUID' }
+        webhook_id: { $ref: '#/components/schemas/UUID' }
+        event_id: { $ref: '#/components/schemas/UUID' }
+        status: { type: string, enum: [PENDING, SUCCESS, FAILED, TIMEOUT, DLQ] }
+        attempt_count: { type: integer }
+        last_attempt_at: { $ref: '#/components/schemas/Timestamp' }
+        response_status: { type: integer }
+        error_message: { type: string }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    ListDlqDeliveriesResponse:
+      type: object
+      required: [deliveries, pagination]
+      properties:
+        deliveries:
+          type: array
+          items: { $ref: '#/components/schemas/DlqDelivery' }
+        pagination: { $ref: '#/components/schemas/PagingMeta' }
+    ReplayDlqResponse:
+      type: object
+      required: [success, message, new_status]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        new_status: { type: string, enum: [PENDING, SUCCESS, FAILED, TIMEOUT, DLQ] }
+    BillingMetricsResponse:
+      type: object
+      required: [total_api_calls, storage_used_gb, active_tenants, total_items, total_locations, total_orders, total_transfers, webhook_deliveries, billing_period]
+      properties:
+        total_api_calls: { type: integer, description: Total API calls across all tenants }
+        storage_used_gb: { type: number, format: double, description: Storage used in GB }
+        active_tenants: { type: integer, description: Number of active tenants }
+        total_items: { type: integer, description: Total items across all tenants }
+        total_locations: { type: integer, description: Total locations across all tenants }
+        total_orders: { type: integer, description: Total orders (purchase + sales) }
+        total_transfers: { type: integer, description: Total transfers }
+        webhook_deliveries:
+          $ref: '#/components/schemas/WebhookMetrics'
+        billing_period:
+          $ref: '#/components/schemas/BillingPeriod'
+    WebhookMetrics:
+      type: object
+      required: [total, successful, failed]
+      properties:
+        total: { type: integer, description: Total webhook deliveries }
+        successful: { type: integer, description: Successful webhook deliveries }
+        failed: { type: integer, description: Failed webhook deliveries }
+    BillingPeriod:
+      type: object
+      required: [start_date, end_date, days_remaining]
+      properties:
+        start_date: { $ref: '#/components/schemas/Timestamp' }
+        end_date: { $ref: '#/components/schemas/Timestamp' }
+        days_remaining: { type: integer, description: Days remaining in billing period }
+    PagingMeta:
       type: object
       properties:
         next_cursor: { type: string }
@@ -1035,6 +1119,155 @@ paths:
           description: search indexes rebuilt successfully
         '500':
           description: internal server error during rebuild
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/dashboard:
+    get:
+      summary: Get admin dashboard overview
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Admin dashboard data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/sandboxes:
+    get:
+      summary: List all sandbox tenants
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sandbox tenants retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSandboxesResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/sandboxes/cleanup:
+    post:
+      summary: Cleanup expired sandbox tenants
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cleanup completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/dlq:
+    get:
+      summary: List failed webhook deliveries in DLQ
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: DLQ deliveries retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListDlqDeliveriesResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/dlq/replay:
+    post:
+      summary: Manually replay a failed webhook delivery from DLQ
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivery_id]
+              properties:
+                delivery_id: { $ref: '#/components/schemas/UUID' }
+      responses:
+        '200':
+          description: Delivery replay attempted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayDlqResponse'
+        '400':
+          description: Invalid request or delivery not in DLQ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/billing:
+    get:
+      summary: Get billing metrics and usage statistics
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Billing metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingMetricsResponse'
+        '500':
+          description: Internal server error
           content:
             application/json:
               schema:

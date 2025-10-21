@@ -1,4 +1,3 @@
-// Application use cases will be implemented here
 pub mod adjust_stock;
 pub mod cleanup_expired_sandboxes;
 pub mod create_item;
@@ -14,6 +13,7 @@ pub mod delete_location;
 pub mod delete_tenant;
 pub mod delete_webhook;
 pub mod enqueue_job;
+pub mod get_billing_metrics;
 pub mod get_item;
 pub mod get_job_status;
 pub mod get_location;
@@ -29,6 +29,7 @@ pub mod get_total_quantity_on_hand;
 pub mod get_transfer;
 pub mod get_webhook_deliveries;
 pub mod idempotency;
+pub mod list_dlq_deliveries;
 pub mod list_item_stock_levels;
 pub mod list_items;
 pub mod list_locations;
@@ -38,6 +39,7 @@ pub mod process_return;
 pub mod receive_purchase_order;
 pub mod receive_transfer;
 pub mod register_webhook;
+pub mod replay_dlq_delivery;
 pub mod retry_webhook_delivery;
 pub mod search_use_case;
 pub mod ship_sales_order;

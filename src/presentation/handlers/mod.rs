@@ -1,4 +1,5 @@
 // Presentation layer handlers
+pub mod admin;
 pub mod jobs;
 pub mod purchase_order;
 pub mod reports;

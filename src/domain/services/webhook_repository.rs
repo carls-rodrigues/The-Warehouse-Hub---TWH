@@ -1,6 +1,7 @@
 use crate::domain::entities::webhook::{Webhook, WebhookDelivery, WebhookEvent, WebhookEventType};
 use crate::shared::error::DomainError;
 use async_trait::async_trait;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 #[async_trait]
@@ -70,6 +71,12 @@ pub trait WebhookRepository: Send + Sync {
     /// Count deliveries for a webhook
     async fn count_webhook_deliveries(&self, webhook_id: Uuid) -> Result<i64, DomainError>;
 
+    /// Count DLQ deliveries
+    async fn count_dlq_deliveries(&self) -> Result<i64, DomainError>;
+
     /// Clean up old events and deliveries (for maintenance)
     async fn cleanup_old_data(&self, days_old: i32) -> Result<(), DomainError>;
+
+    /// Get database pool for direct queries (used by admin use cases)
+    fn get_pool(&self) -> &sqlx::PgPool;
 }
