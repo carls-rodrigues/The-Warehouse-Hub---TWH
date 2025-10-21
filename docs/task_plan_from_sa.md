@@ -4,10 +4,10 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ## Overview
 
-- **Total Tasks**: 32
-- **Estimated Timeline**: 8 weeks with 3 developers
-- **Critical Path**: OpenAPI integration → Items CRUD → Ledger implementation → Projections → Observability
-- **Key Deliverables**: Complete inventory management API with event-sourced ledger, projections, webhooks, jobs, admin UI, and production observability
+- **Total Tasks**: 40 (32 original + 8 Stripe integration)
+- **Estimated Timeline**: 10 weeks with 4 developers (extended for Stripe integration)
+- **Critical Path**: OpenAPI integration → Items CRUD → Ledger implementation → Projections → Stripe Setup → Customer Management → Subscription Management → Admin UI
+- **Key Deliverables**: Complete inventory management API with event-sourced ledger, projections, webhooks, jobs, admin UI, Stripe billing integration, and production observability
 
 ## Task Breakdown
 
@@ -59,9 +59,20 @@ This document outlines the detailed task breakdown, dependencies, sprint plan, r
 
 ### Billing and Compliance Tasks (Sprint 7)
 
-- **TASK-009**: Implement event-sourced metering pipeline and billing exports (60h, P1)
-- **TASK-011**: Nightly reconciliation pipeline and reporting (40h, P0)
-- **TASK-013**: Document controls and prepare SOC2 readiness checklist (40h, P2)
+- **TASK-033**: Set up Stripe account, webhooks, and Rust SDK integration (8h, P0)
+- **TASK-034**: Implement Stripe customer lifecycle management (16h, P0)
+- **TASK-035**: Configure Stripe products, prices, and subscription plans (20h, P0)
+
+### Stripe Billing Tasks (Sprint 8)
+
+- **TASK-036**: Implement subscription lifecycle and billing cycles (24h, P0)
+- **TASK-037**: Integrate Stripe invoices with Warehouse Hub billing (20h, P0)
+- **TASK-038**: Implement payment method management and processing (16h, P0)
+
+### Stripe Admin & Testing Tasks (Sprint 9)
+
+- **TASK-039**: Build admin UI for Stripe billing management (24h, P0)
+- **TASK-040**: Implement billing reconciliation and comprehensive testing (20h, P0)
 
 ### DR and Polish Tasks (Sprint 8)
 
@@ -89,9 +100,11 @@ TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
 | 3 | 7 days | Business Flows | POs, SOs, Transfers, Returns, Adjustments | Transaction flows |
 | 4 | 7 days | Async & Reporting | Webhooks, Jobs, Reports, Exports | Async processing |
 | 5 | 7 days | Admin & DevEx | Sandbox, Admin UI, SDKs | Developer experience |
-| 6 | 7 days | Observability & Security | Monitoring, Multi-tenancy, Vault, Audit | Production-ready |
-| 7 | 7 days | Billing & Compliance | Metering, Reconciliation, Controls | Billing pipeline |
-| 8 | 7 days | DR & Polish | Backups, Runbooks | Launch ready |
+| 6 | 7 days | Observability & Security | Monitoring, Vault, Multi-tenancy, Audit | Production-ready |
+| 7 | 7 days | Stripe Foundation | Setup, Customers, Products | Stripe integration base |
+| 8 | 7 days | Stripe Billing | Subscriptions, Invoices, Payments | Complete billing system |
+| 9 | 7 days | Stripe Admin & Testing | Admin UI, Reconciliation, Testing | Production billing |
+| 10 | 7 days | DR & Polish | Backups, Runbooks | Launch ready |
 
 ## Resource Allocation
 
@@ -100,20 +113,20 @@ TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
 - Tasks: TASK-001, TASK-003, TASK-019-032
 - Focus: Domain API Layer implementation
 
-### dev-agent-2 (Frontend & DevEx) - 120h
+### dev-agent-2 (Frontend & DevEx) - 144h
 
-- Tasks: TASK-002, TASK-012, TASK-018
- - Focus: Admin UI and developer tooling
+- Tasks: TASK-002, TASK-012, TASK-016, TASK-018, TASK-039
+- Focus: Admin UI and developer tooling, including Stripe billing interface
 
 ### dev-agent-3 (Backend Core) - 160h
 
 - Tasks: TASK-004, TASK-005, TASK-008, TASK-014
 - Focus: CQRS, DB, multi-tenancy
 
-### dev-agent-4 (Async Services) - 160h
+### dev-agent-4 (Billing & Stripe Integration) - 144h
 
-- Tasks: TASK-006, TASK-007, TASK-009, TASK-011
-- Focus: Webhooks, jobs, metering
+- Tasks: TASK-033, TASK-034, TASK-035, TASK-036, TASK-037, TASK-038, TASK-040
+- Focus: Stripe integration, billing system, and payment processing
 
 ### dev-agent-5 (Observability & Security) - 96h
 
@@ -134,13 +147,19 @@ TASK-001 → TASK-003 → TASK-004 → TASK-008 → TASK-010
 | TASK-006 | Webhook delivery failures | Medium | Implement DLQ and manual replay from day one |
 | TASK-010 | Observability setup overhead | Low | Use managed services for initial deployment |
 | TASK-016 | SDK maintenance burden | Low | Generate SDKs from OpenAPI, automate publishing |
+| TASK-033 | Stripe API rate limiting and reliability | Medium | Implement retry logic and circuit breakers |
+| TASK-034 | Customer data synchronization issues | High | Implement reconciliation jobs and manual sync tools |
+| TASK-036 | Subscription state complexity | Medium | Start with simple subscriptions, add complexity later |
+| TASK-037 | Invoice sync and webhook reliability | Medium | Implement idempotent operations and manual sync endpoints |
+| TASK-039 | Admin UI complexity for billing operations | Low | Use Stripe hosted pages for complex operations |
 
 ## Next Steps
 
-1. **Immediate**: Begin Sprint 1 with OpenAPI integration and health checks
-2. **Validation**: Run contract tests and quickstart flows after each sprint
-3. **Integration**: Use inventory-openapi.yaml as canonical spec for all implementations
-4. **Monitoring**: Track projection lag and webhook delivery rates from day one
-5. **Compliance**: Prepare SOC2 evidence collection alongside development
+1. **Immediate**: Begin Sprint 7 with Stripe account setup and SDK integration
+2. **Validation**: Test Stripe webhooks and customer synchronization after each billing task
+3. **Integration**: Use existing billing metrics as foundation for Stripe usage-based pricing
+4. **Security**: Implement proper Stripe secret management and webhook signature validation
+5. **Testing**: Thoroughly test subscription lifecycle and payment processing before production
+6. **Launch**: Start with Stripe test mode, validate end-to-end billing flow before live mode
 
-This plan ensures a complete, production-ready inventory management system with strong foundations in event-sourcing, multi-tenancy, and observability.
+This plan ensures a complete, production-ready inventory management system with enterprise-grade Stripe billing integration.

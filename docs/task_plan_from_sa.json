@@ -1968,6 +1968,574 @@
         "Auth login implemented",
         "Tests passing"
       ]
+    },
+    {
+      "task_id": "TASK-033",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Stripe Integration",
+      "title": "Set up Stripe account, webhooks, and Rust SDK integration",
+      "description": "Configure Stripe account, set up webhook endpoints for payment events, and integrate Stripe Rust SDK into the backend application.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Stripe account configured with test/live mode API keys",
+          "Webhook endpoint configured to receive payment events",
+          "Stripe Rust SDK added to Cargo.toml and basic client initialized",
+          "Environment variables configured for Stripe secrets"
+        ],
+        "implementation_details": [
+          "Create Stripe account and obtain API keys for test environment",
+          "Implement POST /webhooks/stripe endpoint to receive Stripe webhooks",
+          "Add stripe-rust crate to dependencies and create Stripe client",
+          "Configure webhook signature verification using Stripe webhook secret",
+          "Set up environment variables for STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET"
+        ],
+        "testing_requirements": [
+          "Unit: Stripe client initialization and basic API calls",
+          "Integration: Webhook endpoint accepts and validates Stripe signatures",
+          "E2E: Test webhook delivery from Stripe dashboard"
+        ],
+        "security_considerations": [
+          "Store Stripe secrets in environment variables, never in code",
+          "Validate webhook signatures to prevent spoofing",
+          "Use test mode for development, live mode only in production"
+        ]
+      },
+      "estimation": {
+        "complexity": "S",
+        "estimated_hours": 8,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Rust",
+          "Stripe API",
+          "Webhooks",
+          "Security"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [],
+        "blocks": [
+          "TASK-034",
+          "TASK-035",
+          "TASK-037"
+        ],
+        "can_parallel": [
+          "TASK-010"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#billing_system",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/presentation/routes",
+          "src/presentation/handlers"
+        ]
+      },
+      "definition_of_done": [
+        "Stripe SDK integrated",
+        "Webhook endpoint functional",
+        "Test payments working"
+      ]
+    },
+    {
+      "task_id": "TASK-034",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Customer Management",
+      "title": "Implement Stripe customer lifecycle management",
+      "description": "Create, update, and manage Stripe customers synchronized with Warehouse Hub tenants, including metadata and billing addresses.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "New tenants automatically create Stripe customers",
+          "Customer metadata includes tenant ID and subscription details",
+          "Customer updates sync between Warehouse Hub and Stripe",
+          "Customer deletion properly handled with subscription cancellation"
+        ],
+        "implementation_details": [
+          "Create CustomerService that wraps Stripe customer operations",
+          "Implement customer creation on tenant provisioning",
+          "Sync customer email, name, and metadata with tenant data",
+          "Handle customer updates when tenant information changes",
+          "Add customer lookup by tenant_id for billing operations"
+        ],
+        "testing_requirements": [
+          "Unit: Customer creation, update, deletion operations",
+          "Integration: Tenant creation triggers Stripe customer creation",
+          "E2E: Customer data remains synchronized across systems"
+        ],
+        "security_considerations": [
+          "Customer PII handled according to privacy regulations",
+          "Customer deletion removes data from both systems",
+          "Audit trail of customer lifecycle events"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 16,
+        "confidence": "high"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Rust",
+          "Stripe API",
+          "Domain modeling",
+          "Data synchronization"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-033"
+        ],
+        "blocks": [
+          "TASK-036",
+          "TASK-038"
+        ],
+        "can_parallel": [
+          "TASK-035"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#tenant_management",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/domain/services",
+          "src/application/use_cases"
+        ]
+      },
+      "definition_of_done": [
+        "Customers sync with tenants",
+        "Customer operations tested",
+        "Data consistency verified"
+      ]
+    },
+    {
+      "task_id": "TASK-035",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Product & Pricing",
+      "title": "Configure Stripe products, prices, and subscription plans",
+      "description": "Set up Stripe products and pricing tiers that match Warehouse Hub's billing model, including API usage, storage, and feature-based pricing.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Stripe products created for API calls, storage, and features",
+          "Pricing tiers configured (free, starter, professional, enterprise)",
+          "Subscription plans support usage-based billing",
+          "Price changes handled with proration"
+        ],
+        "implementation_details": [
+          "Create ProductService for managing Stripe products and prices",
+          "Define pricing structure based on billing metrics (API calls, storage GB, active tenants)",
+          "Implement usage-based pricing with metered billing",
+          "Set up subscription plans with different feature tiers",
+          "Handle price updates and grandfathering for existing customers"
+        ],
+        "testing_requirements": [
+          "Unit: Product and price creation/update operations",
+          "Integration: Pricing calculations match expected costs",
+          "E2E: Subscription changes apply correct pricing"
+        ],
+        "security_considerations": [
+          "Price configuration changes require admin approval",
+          "Audit trail of pricing changes",
+          "No direct customer access to pricing configuration"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 20,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Stripe API",
+          "Business logic",
+          "Pricing models",
+          "Financial calculations"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-033"
+        ],
+        "blocks": [
+          "TASK-036"
+        ],
+        "can_parallel": [
+          "TASK-034"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#billing_model",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/domain/entities",
+          "src/application/use_cases"
+        ]
+      },
+      "definition_of_done": [
+        "Products and prices configured",
+        "Pricing logic implemented",
+        "Subscription plans ready"
+      ]
+    },
+    {
+      "task_id": "TASK-036",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Subscription Management",
+      "title": "Implement subscription lifecycle and billing cycles",
+      "description": "Create and manage Stripe subscriptions with automatic billing cycles, usage reporting, and subscription state synchronization.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Subscriptions created automatically for new paying tenants",
+          "Billing cycles match tenant billing periods",
+          "Usage-based charges applied correctly each cycle",
+          "Subscription changes (upgrade/downgrade) handled with proration"
+        ],
+        "implementation_details": [
+          "Create SubscriptionService for managing Stripe subscriptions",
+          "Implement subscription creation on tenant activation",
+          "Sync subscription status with tenant billing state",
+          "Handle plan changes with immediate or next-cycle application",
+          "Implement subscription cancellation and reactivation"
+        ],
+        "testing_requirements": [
+          "Unit: Subscription operations (create, update, cancel)",
+          "Integration: Billing cycle triggers correct invoice generation",
+          "E2E: Subscription changes reflect in tenant billing status"
+        ],
+        "security_considerations": [
+          "Subscription changes logged for audit purposes",
+          "Customer data protected during subscription operations",
+          "Rate limiting on subscription change operations"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Stripe API",
+          "Subscription management",
+          "Billing cycles",
+          "State synchronization"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-034",
+          "TASK-035"
+        ],
+        "blocks": [
+          "TASK-037",
+          "TASK-039"
+        ],
+        "can_parallel": []
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#subscription_management",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/application/use_cases",
+          "src/domain/services"
+        ]
+      },
+      "definition_of_done": [
+        "Subscriptions auto-created",
+        "Billing cycles working",
+        "Plan changes handled"
+      ]
+    },
+    {
+      "task_id": "TASK-037",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Invoice Integration",
+      "title": "Integrate Stripe invoices with Warehouse Hub billing",
+      "description": "Sync Stripe-generated invoices with Warehouse Hub, provide invoice access through admin API, and handle invoice status updates.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Stripe invoices automatically synced to Warehouse Hub",
+          "Admin API provides invoice listing and detail endpoints",
+          "Invoice status updates (paid, overdue) reflected in tenant data",
+          "Invoice PDFs accessible through admin interface"
+        ],
+        "implementation_details": [
+          "Create InvoiceService for syncing Stripe invoices",
+          "Implement webhook handlers for invoice events (created, paid, overdue)",
+          "Add admin API endpoints: GET /admin/invoices, GET /admin/invoices/{id}",
+          "Store invoice metadata and link to tenant billing history",
+          "Provide invoice PDF URLs from Stripe hosted pages"
+        ],
+        "testing_requirements": [
+          "Unit: Invoice sync operations and API responses",
+          "Integration: Webhook events properly update invoice status",
+          "E2E: Admin can view and download invoices"
+        ],
+        "security_considerations": [
+          "Invoice access restricted to tenant admins",
+          "Invoice data encrypted at rest",
+          "Audit trail of invoice access and changes"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 20,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Stripe API",
+          "API design",
+          "Data synchronization",
+          "File handling"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-033",
+          "TASK-036"
+        ],
+        "blocks": [
+          "TASK-040"
+        ],
+        "can_parallel": [
+          "TASK-038"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#invoice_management",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/presentation/handlers",
+          "src/presentation/routes"
+        ]
+      },
+      "definition_of_done": [
+        "Invoices sync from Stripe",
+        "Admin API endpoints working",
+        "Invoice access functional"
+      ]
+    },
+    {
+      "task_id": "TASK-038",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Payment Processing",
+      "title": "Implement payment method management and processing",
+      "description": "Handle payment method setup, updates, and failed payment recovery through Stripe integration.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Customers can add/update payment methods through Stripe",
+          "Failed payments trigger dunning management",
+          "Payment method changes reflected in billing status",
+          "Payment failures handled with retry logic and notifications"
+        ],
+        "implementation_details": [
+          "Create PaymentService for payment method operations",
+          "Implement payment method setup through Stripe Checkout or Elements",
+          "Handle webhook events for payment failures and successes",
+          "Implement dunning management for failed payments",
+          "Set up email notifications for payment issues"
+        ],
+        "testing_requirements": [
+          "Unit: Payment method operations and failure handling",
+          "Integration: Webhook events trigger correct actions",
+          "E2E: Failed payment recovery process works"
+        ],
+        "security_considerations": [
+          "Payment data never stored locally, only Stripe references",
+          "PCI compliance handled by Stripe",
+          "Payment method access restricted to customer owners"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 16,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Stripe API",
+          "Payment processing",
+          "Error handling",
+          "Notification systems"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-034"
+        ],
+        "blocks": [
+          "TASK-039"
+        ],
+        "can_parallel": [
+          "TASK-037"
+        ]
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#payment_processing",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/application/use_cases",
+          "src/domain/services"
+        ]
+      },
+      "definition_of_done": [
+        "Payment methods manageable",
+        "Failed payments handled",
+        "Dunning process working"
+      ]
+    },
+    {
+      "task_id": "TASK-039",
+      "requirement_id": "REQ-010",
+      "component": "Admin UI / Billing Dashboard",
+      "title": "Build admin UI for Stripe billing management",
+      "description": "Create admin interface components for viewing invoices, managing subscriptions, and monitoring billing metrics with Stripe integration.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Invoice list and detail views in admin UI",
+          "Subscription management interface",
+          "Billing metrics dashboard with Stripe data",
+          "Payment method management for customers"
+        ],
+        "implementation_details": [
+          "Create invoice list component with filtering and search",
+          "Add subscription management to tenant admin pages",
+          "Integrate Stripe data with existing billing dashboard",
+          "Implement payment method management interface",
+          "Add billing configuration options for admins"
+        ],
+        "testing_requirements": [
+          "Unit: UI components render correctly",
+          "Integration: API calls return expected Stripe data",
+          "E2E: Admin can manage billing through UI"
+        ],
+        "security_considerations": [
+          "Admin-only access to billing management",
+          "Customer data masked appropriately",
+          "Audit logging of admin billing actions"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 24,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-2",
+        "skillset_required": [
+          "React",
+          "TypeScript",
+          "UI/UX",
+          "API integration"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-036",
+          "TASK-037",
+          "TASK-038"
+        ],
+        "blocks": [
+          "TASK-040"
+        ],
+        "can_parallel": []
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#admin_interface",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "admin-ui/src/app/admin",
+          "admin-ui/src/components"
+        ]
+      },
+      "definition_of_done": [
+        "Admin billing UI complete",
+        "Invoice management working",
+        "Subscription controls functional"
+      ]
+    },
+    {
+      "task_id": "TASK-040",
+      "requirement_id": "REQ-010",
+      "component": "Billing / Testing & Reconciliation",
+      "title": "Implement billing reconciliation and comprehensive testing",
+      "description": "Create reconciliation processes to ensure billing data consistency between Warehouse Hub and Stripe, with comprehensive test coverage.",
+      "technical_specification": {
+        "acceptance_criteria": [
+          "Automated reconciliation checks between systems",
+          "Comprehensive test suite for billing operations",
+          "Billing data integrity verification",
+          "Discrepancy detection and resolution processes"
+        ],
+        "implementation_details": [
+          "Create reconciliation job to compare Warehouse Hub and Stripe data",
+          "Implement billing test suite with mock Stripe operations",
+          "Add data integrity checks for billing operations",
+          "Set up monitoring for billing discrepancies",
+          "Create manual reconciliation tools for admins"
+        ],
+        "testing_requirements": [
+          "Unit: All billing operations have test coverage",
+          "Integration: End-to-end billing flows tested",
+          "E2E: Reconciliation processes work correctly",
+          "Load: Billing system handles expected transaction volume"
+        ],
+        "security_considerations": [
+          "Test data doesn't contain real payment information",
+          "Reconciliation reports access restricted",
+          "Audit trail of reconciliation operations"
+        ]
+      },
+      "estimation": {
+        "complexity": "M",
+        "estimated_hours": 20,
+        "confidence": "medium"
+      },
+      "assignment": {
+        "agent_id": "dev-agent-4",
+        "skillset_required": [
+          "Testing",
+          "Data reconciliation",
+          "Monitoring",
+          "Financial systems"
+        ],
+        "priority": "P0"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "TASK-037",
+          "TASK-039"
+        ],
+        "blocks": [],
+        "can_parallel": []
+      },
+      "resources": {
+        "architecture_reference": "docs/solution_architecture_from_ba.json#data_integrity",
+        "api_spec": "inventory-openapi.yaml",
+        "related_code": [
+          "src/application/use_cases",
+          "tests/"
+        ]
+      },
+      "definition_of_done": [
+        "Reconciliation working",
+        "Test coverage complete",
+        "Billing system reliable"
+      ]
     }
   ],
   "dependency_graph": {
@@ -1976,7 +2544,11 @@
       "TASK-003",
       "TASK-004",
       "TASK-008",
-      "TASK-010"
+      "TASK-010",
+      "TASK-033",
+      "TASK-034",
+      "TASK-036",
+      "TASK-037"
     ],
     "parallel_tracks": [
       [
@@ -1990,12 +2562,14 @@
         "TASK-007"
       ],
       [
-        "TASK-009",
-        "TASK-011",
-        "TASK-013"
+        "TASK-033",
+        "TASK-035",
+        "TASK-038",
+        "TASK-039",
+        "TASK-040"
       ]
     ],
-    "estimated_timeline": "8 weeks with 3 developers"
+    "estimated_timeline": "10 weeks with 4 developers"
   },
   "sprint_plan": [
     {
@@ -2077,16 +2651,37 @@
     {
       "sprint": 7,
       "duration_days": 7,
-      "goal": "Billing and Compliance: Metering, Reconciliation, Controls",
+      "goal": "Stripe Integration: Setup, Customers, Products",
       "tasks": [
-        "TASK-009",
-        "TASK-011",
-        "TASK-013"
+        "TASK-033",
+        "TASK-034",
+        "TASK-035"
       ],
-      "deliverable": "Billing pipeline and compliance readiness"
+      "deliverable": "Stripe foundation with customer and product management"
     },
     {
       "sprint": 8,
+      "duration_days": 7,
+      "goal": "Stripe Billing: Subscriptions, Invoices, Payments",
+      "tasks": [
+        "TASK-036",
+        "TASK-037",
+        "TASK-038"
+      ],
+      "deliverable": "Complete billing system with Stripe integration"
+    },
+    {
+      "sprint": 9,
+      "duration_days": 7,
+      "goal": "Stripe Admin UI and Testing",
+      "tasks": [
+        "TASK-039",
+        "TASK-040"
+      ],
+      "deliverable": "Admin billing interface and system testing"
+    },
+    {
+      "sprint": 10,
       "duration_days": 7,
       "goal": "DR and Polish: Backups, Runbooks, Final Testing",
       "tasks": [
@@ -2124,9 +2719,10 @@
         "TASK-002",
         "TASK-012",
         "TASK-016",
-        "TASK-018"
+        "TASK-018",
+        "TASK-039"
       ],
-      "workload_hours": 120
+      "workload_hours": 144
     },
     "dev-agent-3": {
       "specialization": "Backend Core (CQRS, DB)",
@@ -2139,14 +2735,17 @@
       "workload_hours": 160
     },
     "dev-agent-4": {
-      "specialization": "Async Services",
+      "specialization": "Billing & Stripe Integration",
       "assigned_tasks": [
-        "TASK-006",
-        "TASK-007",
-        "TASK-009",
-        "TASK-011"
+        "TASK-033",
+        "TASK-034",
+        "TASK-035",
+        "TASK-036",
+        "TASK-037",
+        "TASK-038",
+        "TASK-040"
       ],
-      "workload_hours": 160
+      "workload_hours": 144
     },
     "dev-agent-5": {
       "specialization": "Observability and Security",
@@ -2195,6 +2794,36 @@
       "risk": "SDK maintenance burden",
       "impact": "low",
       "contingency": "Generate SDKs from OpenAPI, automate publishing"
+    },
+    {
+      "task_id": "TASK-033",
+      "risk": "Stripe API rate limiting and reliability",
+      "impact": "medium",
+      "contingency": "Implement retry logic and circuit breakers"
+    },
+    {
+      "task_id": "TASK-034",
+      "risk": "Customer data synchronization issues",
+      "impact": "high",
+      "contingency": "Implement reconciliation jobs and manual sync tools"
+    },
+    {
+      "task_id": "TASK-036",
+      "risk": "Subscription state complexity",
+      "impact": "medium",
+      "contingency": "Start with simple subscriptions, add complexity later"
+    },
+    {
+      "task_id": "TASK-037",
+      "risk": "Invoice sync and webhook reliability",
+      "impact": "medium",
+      "contingency": "Implement idempotent operations and manual sync endpoints"
+    },
+    {
+      "task_id": "TASK-039",
+      "risk": "Admin UI complexity for billing operations",
+      "impact": "low",
+      "contingency": "Use Stripe hosted pages for complex operations"
     }
   ]
 }
