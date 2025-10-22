@@ -55,7 +55,7 @@ impl TenantMiddleware {
             Err(_) => {
                 // For now, allow requests without authentication to proceed with default tenant
                 // In production, this should return 401 Unauthorized
-                Some(uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap())
+                Some(uuid::Uuid::parse_str("d60a7de9-1009-4606-aae9-ae6ffe5827aa").unwrap())
             }
         };
 

@@ -11,7 +11,7 @@ use crate::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -144,24 +144,19 @@ pub struct ListItemsQuery {
 
 pub async fn create_item_handler(
     State(state): State<AppState>,
+    tenant_context: Option<
+        Extension<crate::infrastructure::middleware::tenant_middleware::TenantContext>,
+    >,
     Json(request): Json<CreateItemRequestDto>,
 ) -> Result<(StatusCode, Json<CreateItemResponseDto>), (StatusCode, Json<ErrorResponse>)> {
-    // For now, use default tenant. In production, this would come from JWT middleware
-    let tenant_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+    // Extract tenant_id from extension or default to sandbox tenant
+    let tenant_id = tenant_context
+        .map(|ext| ext.tenant_id)
+        .unwrap_or_else(|| uuid::Uuid::parse_str("d60a7de9-1009-4606-aae9-ae6ffe5827aa").unwrap());
 
-    // Start a transaction and set tenant context within it
-    let mut tx = state.pool.begin().await.map_err(|e| {
-        let error_response = ErrorResponse {
-            error: "INTERNAL_ERROR".to_string(),
-            message: format!("Failed to start transaction: {e}"),
-        };
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
-    })?;
-
-    // Set tenant context for this transaction
-    sqlx::query("SELECT set_tenant_context($1)")
-        .bind(tenant_id)
-        .execute(&mut *tx)
+    // Set tenant context on the connection pool
+    sqlx::query!("SELECT set_tenant_context($1)", tenant_id)
+        .execute(&*state.pool)
         .await
         .map_err(|e| {
             let error_response = ErrorResponse {
@@ -171,9 +166,7 @@ pub async fn create_item_handler(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
         })?;
 
-    // Initialize use case with transaction
-    // Note: This requires modifying the repository to accept a transaction
-    // For now, let's use the regular approach and see if the session context works
+    // Initialize use case
     let item_repository = Arc::new(PostgresItemRepository::new(Arc::clone(&state.pool)));
     let use_case = CreateItemUseCase::new(item_repository); // Convert DTO to domain request
     let domain_request = CreateItemRequest {

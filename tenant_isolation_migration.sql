@@ -166,7 +166,7 @@ CREATE POLICY tenant_tenants_policy ON tenants
 CREATE OR REPLACE FUNCTION set_tenant_context(tenant_uuid UUID)
 RETURNS VOID AS $$
 BEGIN
-    PERFORM set_config('app.tenant_id', tenant_uuid::TEXT, false);
+    PERFORM set_config('custom.tenant_id', tenant_uuid::TEXT, false);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -174,7 +174,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_current_tenant_id()
 RETURNS UUID AS $$
 BEGIN
-    RETURN current_setting('app.tenant_id')::UUID;
+    RETURN current_setting('custom.tenant_id')::UUID;
 EXCEPTION
     WHEN OTHERS THEN
         RETURN NULL;
@@ -271,14 +271,50 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Create function to update tenant storage usage
 CREATE OR REPLACE FUNCTION update_tenant_storage_usage()
 RETURNS TRIGGER AS $$
+DECLARE
+    tenant_id UUID;
+    total_storage_bytes BIGINT := 0;
+    items_storage BIGINT := 0;
+    locations_storage BIGINT := 0;
+    webhooks_storage BIGINT := 0;
 BEGIN
-    -- This trigger will be attached to tables to track storage usage
-    -- For now, just update the updated_at timestamp
-    -- Actual storage calculation would be more complex and might be done via background jobs
+    -- Get the tenant_id from the operation
+    tenant_id := COALESCE(NEW.tenant_id, OLD.tenant_id);
 
+    IF tenant_id IS NULL THEN
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    -- Calculate storage usage for items (rough estimate: 1KB per item for metadata)
+    SELECT COUNT(*) * 1024 INTO items_storage
+    FROM items
+    WHERE tenant_id = tenant_id;
+
+    -- Calculate storage usage for locations (rough estimate: 512B per location)
+    SELECT COUNT(*) * 512 INTO locations_storage
+    FROM locations
+    WHERE tenant_id = tenant_id;
+
+    -- Calculate storage usage for webhooks (rough estimate: 2KB per webhook for config + events)
+    SELECT COUNT(*) * 2048 INTO webhooks_storage
+    FROM webhooks
+    WHERE tenant_id = tenant_id;
+
+    -- Add storage for webhook events (rough estimate: 1KB per event)
+    SELECT webhooks_storage + (COUNT(we.*) * 1024) INTO webhooks_storage
+    FROM webhooks w
+    LEFT JOIN webhook_events we ON w.id = we.webhook_id
+    WHERE w.tenant_id = tenant_id;
+
+    -- Calculate total storage in MB
+    total_storage_bytes := items_storage + locations_storage + webhooks_storage;
+    total_storage_bytes := total_storage_bytes / (1024 * 1024); -- Convert to MB
+
+    -- Update the quota record
     UPDATE tenant_quotas
-    SET updated_at = NOW()
-    WHERE tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id);
+    SET current_storage_mb = total_storage_bytes,
+        updated_at = NOW()
+    WHERE tenant_id = tenant_id;
 
     RETURN COALESCE(NEW, OLD);
 END;
@@ -290,15 +326,19 @@ RETURNS TRIGGER AS $$
 DECLARE
     quota_record RECORD;
     current_count INTEGER;
+    tenant_id UUID;
 BEGIN
+    -- Get tenant ID from session context
+    tenant_id := get_current_tenant_id();
+
     -- Get tenant quota
     SELECT * INTO quota_record
     FROM tenant_quotas
-    WHERE tenant_id = NEW.tenant_id;
+    WHERE tenant_id = tenant_id;
 
     IF quota_record IS NULL THEN
         -- Create default quota if not exists
-        INSERT INTO tenant_quotas (tenant_id) VALUES (NEW.tenant_id);
+        INSERT INTO tenant_quotas (tenant_id) VALUES (tenant_id);
         RETURN NEW;
     END IF;
 
@@ -306,29 +346,29 @@ BEGIN
     CASE TG_TABLE_NAME
         WHEN 'items' THEN
             SELECT COUNT(*) INTO current_count
-            FROM items
-            WHERE tenant_id = NEW.tenant_id;
+            FROM items i
+            WHERE i.tenant_id = tenant_id;
 
             IF current_count >= quota_record.max_items THEN
-                RAISE EXCEPTION 'Item quota exceeded for tenant %', NEW.tenant_id;
+                RAISE EXCEPTION 'Item quota exceeded for tenant %', tenant_id;
             END IF;
 
         WHEN 'locations' THEN
             SELECT COUNT(*) INTO current_count
-            FROM locations
-            WHERE tenant_id = NEW.tenant_id;
+            FROM locations l
+            WHERE l.tenant_id = tenant_id;
 
             IF current_count >= quota_record.max_locations THEN
-                RAISE EXCEPTION 'Location quota exceeded for tenant %', NEW.tenant_id;
+                RAISE EXCEPTION 'Location quota exceeded for tenant %', tenant_id;
             END IF;
 
         WHEN 'webhooks' THEN
             SELECT COUNT(*) INTO current_count
-            FROM webhooks
-            WHERE tenant_id = NEW.tenant_id;
+            FROM webhooks w
+            WHERE w.tenant_id = tenant_id;
 
             IF current_count >= quota_record.max_webhooks THEN
-                RAISE EXCEPTION 'Webhook quota exceeded for tenant %', NEW.tenant_id;
+                RAISE EXCEPTION 'Webhook quota exceeded for tenant %', tenant_id;
             END IF;
     END CASE;
 
@@ -336,9 +376,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Add triggers for quota validation (will be applied after data migration)
--- These are commented out until we migrate existing data
-/*
+-- Add triggers for quota validation (activated after verifying data migration)
 CREATE TRIGGER validate_items_quota
     BEFORE INSERT ON items
     FOR EACH ROW EXECUTE FUNCTION validate_tenant_quotas();
@@ -350,17 +388,42 @@ CREATE TRIGGER validate_locations_quota
 CREATE TRIGGER validate_webhooks_quota
     BEFORE INSERT ON webhooks
     FOR EACH ROW EXECUTE FUNCTION validate_tenant_quotas();
-*/
 
--- Add triggers for storage usage tracking
-CREATE TRIGGER update_storage_usage_items
-    AFTER INSERT OR UPDATE OR DELETE ON items
-    FOR EACH ROW EXECUTE FUNCTION update_tenant_storage_usage();
+-- Create function to set tier-based quotas for new tenants
+CREATE OR REPLACE FUNCTION set_tenant_tier_quotas()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Set quotas based on tenant tier
+    CASE NEW.tier
+        WHEN 'FREE' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 100, 5, 1, 100, 50);
+        WHEN 'DEVELOPER' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 1000, 20, 5, 1000, 200);
+        WHEN 'STARTUP' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 10000, 100, 10, 5000, 1000);
+        WHEN 'GROWTH' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 50000, 500, 25, 25000, 5000);
+        WHEN 'SCALE' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 200000, 2000, 100, 100000, 20000);
+        WHEN 'ENTERPRISE' THEN
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 1000000, 10000, 500, 500000, 100000);
+        ELSE
+            -- Default quotas for unknown tiers
+            INSERT INTO tenant_quotas (tenant_id, max_items, max_locations, max_webhooks, max_api_calls_per_hour, max_storage_mb)
+            VALUES (NEW.id, 10000, 100, 10, 10000, 1000);
+    END CASE;
 
-CREATE TRIGGER update_storage_usage_locations
-    AFTER INSERT OR UPDATE OR DELETE ON locations
-    FOR EACH ROW EXECUTE FUNCTION update_tenant_storage_usage();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_storage_usage_webhooks
-    AFTER INSERT OR UPDATE OR DELETE ON webhooks
-    FOR EACH ROW EXECUTE FUNCTION update_tenant_storage_usage();
+-- Add trigger to automatically set tier-based quotas when tenants are created
+CREATE TRIGGER set_tenant_quotas_on_create
+    AFTER INSERT ON tenants
+    FOR EACH ROW EXECUTE FUNCTION set_tenant_tier_quotas();

@@ -24,7 +24,7 @@ impl ItemRepository for PostgresItemRepository {
             SELECT id, sku, name, description, category, unit, barcode, cost_price, sale_price,
                    reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at
             FROM items
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = get_current_tenant_id()
             "#,
             id
         )
@@ -66,9 +66,9 @@ impl ItemRepository for PostgresItemRepository {
         let result = sqlx::query!(
             r#"
             SELECT id, sku, name, description, category, unit, barcode, cost_price, sale_price,
-                   reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at
+                   reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at
             FROM items
-            WHERE sku = $1
+            WHERE sku = $1 AND tenant_id = get_current_tenant_id()
             "#,
             sku
         )
@@ -107,6 +107,20 @@ impl ItemRepository for PostgresItemRepository {
     }
 
     async fn save(&self, item: &Item) -> Result<(), DomainError> {
+        // Get a connection from the pool
+        let mut conn = self.pool.acquire().await.map_err(|e| {
+            DomainError::ValidationError(format!("Failed to acquire connection: {}", e))
+        })?;
+
+        // Set tenant context on this connection
+        // Note: This is a temporary workaround until proper transaction handling is implemented
+        sqlx::query("SELECT set_tenant_context(get_current_tenant_id())")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| {
+                DomainError::ValidationError(format!("Failed to set tenant context: {}", e))
+            })?;
+
         let dimensions_json = item
             .dimensions
             .as_ref()
@@ -115,8 +129,8 @@ impl ItemRepository for PostgresItemRepository {
         sqlx::query!(
             r#"
             INSERT INTO items (id, sku, name, description, category, unit, barcode, cost_price, sale_price,
-                              reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                              reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             "#,
             item.id,
             item.sku,
@@ -132,12 +146,11 @@ impl ItemRepository for PostgresItemRepository {
             item.weight,
             dimensions_json,
             item.metadata,
-            uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(), // Default tenant
             item.active,
             item.created_at,
             item.updated_at
         )
-        .execute(&*self.pool)
+        .execute(&mut *conn)
         .await
         .map_err(|e| DomainError::ValidationError(format!("Database error: {}", e)))?;
 
@@ -156,7 +169,7 @@ impl ItemRepository for PostgresItemRepository {
             SET sku = $2, name = $3, description = $4, category = $5, unit = $6, barcode = $7,
                 cost_price = $8, sale_price = $9, reorder_point = $10, reorder_qty = $11,
                 weight = $12, dimensions = $13, metadata = $14, active = $15, updated_at = $16
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = get_current_tenant_id()
             "#,
             item.id,
             item.sku,
@@ -185,7 +198,7 @@ impl ItemRepository for PostgresItemRepository {
     async fn delete(&self, id: Uuid) -> Result<(), DomainError> {
         sqlx::query!(
             r#"
-            DELETE FROM items WHERE id = $1
+            DELETE FROM items WHERE id = $1 AND tenant_id = get_current_tenant_id()
             "#,
             id
         )
@@ -200,8 +213,9 @@ impl ItemRepository for PostgresItemRepository {
         let rows = sqlx::query!(
             r#"
             SELECT id, sku, name, description, category, unit, barcode, cost_price, sale_price,
-                   reorder_point, reorder_qty, weight, dimensions, metadata, active, created_at, updated_at
+                   reorder_point, reorder_qty, weight, dimensions, metadata, tenant_id, active, created_at, updated_at
             FROM items
+            WHERE tenant_id = get_current_tenant_id()
             ORDER BY created_at DESC
             LIMIT $1 OFFSET $2
             "#,
@@ -245,7 +259,7 @@ impl ItemRepository for PostgresItemRepository {
     async fn count(&self) -> Result<i64, DomainError> {
         let count: Option<i64> = sqlx::query_scalar!(
             r#"
-            SELECT COUNT(*) FROM items
+            SELECT COUNT(*) FROM items WHERE tenant_id = get_current_tenant_id()
             "#
         )
         .fetch_one(&*self.pool)
@@ -262,14 +276,14 @@ impl ItemRepository for PostgresItemRepository {
     ) -> Result<bool, DomainError> {
         let count: Option<i64> = if let Some(exclude_id) = exclude_item_id {
             sqlx::query_scalar!(
-                "SELECT COUNT(*) FROM items WHERE sku = $1 AND id != $2",
+                "SELECT COUNT(*) FROM items WHERE sku = $1 AND tenant_id = get_current_tenant_id() AND id != $2",
                 sku,
                 exclude_id
             )
             .fetch_one(&*self.pool)
             .await
         } else {
-            sqlx::query_scalar!("SELECT COUNT(*) FROM items WHERE sku = $1", sku)
+            sqlx::query_scalar!("SELECT COUNT(*) FROM items WHERE sku = $1 AND tenant_id = get_current_tenant_id()", sku)
                 .fetch_one(&*self.pool)
                 .await
         }
