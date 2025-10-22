@@ -30,6 +30,7 @@ pub struct UpdateItemRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     pub id: Uuid,
+    pub tenant_id: Uuid,
     pub sku: String,
     pub name: String,
     pub description: Option<String>,
@@ -50,6 +51,7 @@ pub struct Item {
 
 impl Item {
     pub fn new(
+        tenant_id: Uuid,
         sku: String,
         name: String,
         unit: String,
@@ -83,6 +85,7 @@ impl Item {
 
         Ok(Self {
             id: Uuid::new_v4(),
+            tenant_id,
             sku,
             name,
             description: None,

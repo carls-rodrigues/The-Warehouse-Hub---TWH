@@ -47,6 +47,7 @@ impl<R: ItemRepository> CreateItemUseCase<R> {
     pub async fn execute(
         &self,
         request: CreateItemRequest,
+        tenant_id: Uuid,
     ) -> Result<CreateItemResponse, DomainError> {
         // Check if SKU already exists
         let sku_exists = self.item_repository.sku_exists(&request.sku, None).await?;
@@ -58,7 +59,13 @@ impl<R: ItemRepository> CreateItemUseCase<R> {
         }
 
         // Create the item with required fields
-        let mut item = Item::new(request.sku, request.name, request.unit, request.cost_price)?;
+        let mut item = Item::new(
+            tenant_id,
+            request.sku,
+            request.name,
+            request.unit,
+            request.cost_price,
+        )?;
 
         // Update with optional fields
         let update_request = crate::domain::entities::item::UpdateItemRequest {

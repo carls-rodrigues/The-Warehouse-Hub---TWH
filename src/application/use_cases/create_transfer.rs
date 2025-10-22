@@ -1,6 +1,4 @@
-use crate::domain::entities::transfer::{
-    CreateTransferRequest, StockMovement, Transfer, TransferLine,
-};
+use crate::domain::entities::transfer::{CreateTransferRequest, Transfer, TransferLine};
 use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::transfer_repository::TransferRepository;
 use crate::domain::services::webhook_dispatcher::WebhookDispatcher;

@@ -188,7 +188,7 @@ pub async fn create_item_handler(
     };
 
     // Execute use case
-    match use_case.execute(domain_request).await {
+    match use_case.execute(domain_request, tenant_id).await {
         Ok(response) => {
             let dto = CreateItemResponseDto {
                 id: response.id.to_string(),

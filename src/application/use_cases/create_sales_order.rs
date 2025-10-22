@@ -3,7 +3,6 @@ use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::sales_order_repository::SalesOrderRepository;
 use crate::domain::services::webhook_dispatcher::WebhookDispatcher;
 use crate::shared::error::DomainError;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;

@@ -37,3 +37,6 @@ opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
 tracing-opentelemetry = "0.25"
 prometheus = "0.13.0"
 opentelemetry-prometheus = "0.17"
+
+[dev-dependencies]
+mockall = "0.12"

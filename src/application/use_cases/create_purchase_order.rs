@@ -1,6 +1,4 @@
-use crate::domain::entities::purchase_order::{
-    CreatePurchaseOrderLine, CreatePurchaseOrderRequest, PurchaseOrder,
-};
+use crate::domain::entities::purchase_order::{CreatePurchaseOrderLine, PurchaseOrder};
 use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::purchase_order_repository::PurchaseOrderRepository;
 use crate::domain::services::webhook_dispatcher::WebhookDispatcher;

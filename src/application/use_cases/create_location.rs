@@ -1,6 +1,4 @@
-use crate::domain::entities::location::{
-    Location, LocationAddress, LocationType, UpdateLocationRequest,
-};
+use crate::domain::entities::location::{Location, LocationAddress, UpdateLocationRequest};
 use crate::domain::services::location_repository::LocationRepository;
 use crate::shared::error::DomainError;
 use serde::{Deserialize, Serialize};

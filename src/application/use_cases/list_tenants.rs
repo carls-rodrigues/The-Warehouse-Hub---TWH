@@ -23,7 +23,7 @@ impl<T: TenantRepository> ListTenantsUseCase<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::entities::tenant::{Tenant, TenantStatus, TenantType};
+    use crate::domain::entities::tenant::{Tenant, TenantStatus, TenantTier, TenantType};
     use chrono::Utc;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -37,9 +37,10 @@ mod tests {
             id: Uuid::new_v4(),
             name: "Test Tenant".to_string(),
             tenant_type: TenantType::Sandbox,
+            tier: TenantTier::Free,
             status: TenantStatus::Active,
             database_schema: "tenant_123".to_string(),
-            created_by: Uuid::new_v4(),
+            created_by: Some(Uuid::new_v4()),
             expires_at: Some(Utc::now()),
             created_at: Utc::now(),
             updated_at: Utc::now(),

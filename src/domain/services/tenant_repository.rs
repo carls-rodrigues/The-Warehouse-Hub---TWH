@@ -33,3 +33,23 @@ pub trait TenantRepository: Send + Sync {
         tenant_id: Uuid,
     ) -> Result<Option<crate::domain::entities::tenant::TenantTier>, DomainError>;
 }
+
+#[cfg(test)]
+use mockall::mock;
+
+#[cfg(test)]
+mock! {
+    pub TenantRepository {}
+
+    #[async_trait]
+    impl TenantRepository for TenantRepository {
+        async fn create_tenant(&self, tenant: &Tenant) -> Result<(), DomainError>;
+        async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>, DomainError>;
+        async fn list_tenants(&self) -> Result<Vec<Tenant>, DomainError>;
+        async fn update_tenant_status(&self, tenant_id: Uuid, status: &str) -> Result<(), DomainError>;
+        async fn delete_tenant(&self, tenant_id: Uuid) -> Result<(), DomainError>;
+        async fn get_expired_sandboxes(&self) -> Result<Vec<Tenant>, DomainError>;
+        async fn permanently_delete_tenant(&self, tenant_id: Uuid) -> Result<(), DomainError>;
+        async fn get_tenant_tier(&self, tenant_id: Uuid) -> Result<Option<crate::domain::entities::tenant::TenantTier>, DomainError>;
+    }
+}

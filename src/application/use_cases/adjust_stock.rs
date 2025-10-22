@@ -1,6 +1,5 @@
 use crate::domain::entities::inventory::{
-    Adjustment, AdjustmentReason, MovementType, ReferenceType, StockAdjustmentRequest,
-    StockMovement,
+    Adjustment, MovementType, ReferenceType, StockAdjustmentRequest, StockMovement,
 };
 use crate::domain::entities::webhook::{WebhookEvent, WebhookEventType};
 use crate::domain::services::stock_repository::StockRepository;
