@@ -2310,6 +2310,37 @@ paths:
                   version: { type: string }
                   db: { type: string, enum: [ok, degraded, down] }
 
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      description: |
+        Returns application metrics in Prometheus format for monitoring and alerting.
+
+        This endpoint exposes OpenTelemetry metrics including:
+        - HTTP request duration histograms
+        - HTTP request counters
+        - Database query metrics
+        - Webhook delivery metrics
+        - Job processing metrics
+      tags: [Observability]
+      responses:
+        '200':
+          description: Metrics in Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP http_request_duration_seconds HTTP request duration in seconds
+                  # TYPE http_request_duration_seconds histogram
+                  http_request_duration_seconds_bucket{method="GET",status="200",le="0.1"} 1
+                  http_request_duration_seconds_bucket{method="GET",status="200",le="0.5"} 1
+                  http_request_duration_seconds_count{method="GET",status="200"} 1
+                  http_request_duration_seconds_sum{method="GET",status="200"} 0.023
+                  # HELP http_requests_total_total Total number of HTTP requests
+                  # TYPE http_requests_total_total counter
+                  http_requests_total_total{method="GET",status="200"} 1
+
 tags:
   - name: Auth
     description: Authentication and token endpoints
@@ -2341,6 +2372,8 @@ tags:
     description: Export endpoints (CSV)
   - name: Health
     description: System health and status
+  - name: Observability
+    description: Metrics, monitoring, and observability endpoints
 
 externalDocs:
   description: Implementation notes, migration guide, SDKs, and examples

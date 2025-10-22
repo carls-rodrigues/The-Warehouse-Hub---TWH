@@ -147,10 +147,16 @@
 - Chaos/injection tests for Redis/Kafka failures and projection rebuild scenarios.
 
 ## Observability
-- Metrics: Prometheus metrics for request latency, error rate, webhook success, job backlog, reconciliation mismatches.  
-- Tracing: OpenTelemetry propagated across services; sample traces for long transactions.  
-- Logging: Structured JSON logs with request_id, tenant_id, user_id, and correlation IDs; central log store (ELK/Loki).  
-- Dashboards: Grafana dashboards for SLOs, per-tenant throttles, webhook DLQ, job queue backlog.  
+- **Metrics**: Prometheus `/metrics` endpoint with OpenTelemetry SDK integration
+  - HTTP request duration histograms (by method, status code)
+  - HTTP request counters (by method, status code)
+  - Database query metrics (planned)
+  - Webhook delivery success/failure rates (planned)
+  - Job processing metrics (planned)
+  - See [Sprint 6 Observability Documentation](../docs/sprint-6/observability.md) for detailed specifications
+- Tracing: OpenTelemetry propagated across services; sample traces for long transactions.
+- Logging: Structured JSON logs with request_id, tenant_id, user_id, and correlation IDs; central log store (ELK/Loki).
+- Dashboards: Grafana dashboards for SLOs, per-tenant throttles, webhook DLQ, job queue backlog.
 - Alerts: Alert rules (429 spike, webhook DLQ growth, queue backlog threshold, reconciliation mismatch rate) routed to PagerDuty/Slack.
 
 ## Runbooks (short list)
