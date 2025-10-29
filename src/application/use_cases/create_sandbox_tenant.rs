@@ -113,7 +113,10 @@ where
             dimensions: None,
             metadata: None,
         };
-        let _laptop = self.create_item_use_case.execute(laptop_request, _tenant.id).await?;
+        let _laptop = self
+            .create_item_use_case
+            .execute(laptop_request, _tenant.id)
+            .await?;
 
         let mouse_request = CreateItemRequest {
             sku: "MSE-001".to_string(),
@@ -130,7 +133,10 @@ where
             dimensions: None,
             metadata: None,
         };
-        let _mouse = self.create_item_use_case.execute(mouse_request, _tenant.id).await?;
+        let _mouse = self
+            .create_item_use_case
+            .execute(mouse_request, _tenant.id)
+            .await?;
 
         let keyboard_request = CreateItemRequest {
             sku: "KBD-001".to_string(),
@@ -147,7 +153,10 @@ where
             dimensions: None,
             metadata: None,
         };
-        let _keyboard = self.create_item_use_case.execute(keyboard_request, _tenant.id).await?;
+        let _keyboard = self
+            .create_item_use_case
+            .execute(keyboard_request, _tenant.id)
+            .await?;
 
         let tshirt_request = CreateItemRequest {
             sku: "TSH-001".to_string(),
@@ -164,7 +173,10 @@ where
             dimensions: None,
             metadata: None,
         };
-        let _tshirt = self.create_item_use_case.execute(tshirt_request, _tenant.id).await?;
+        let _tshirt = self
+            .create_item_use_case
+            .execute(tshirt_request, _tenant.id)
+            .await?;
 
         // TODO: Create initial stock levels for these items
         // This would require a create_stock_adjustment use case

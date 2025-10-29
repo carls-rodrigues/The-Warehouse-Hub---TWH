@@ -29,9 +29,9 @@ impl PostgresStockRepository {
             r#"
             INSERT INTO stock_movements (
                 id, item_id, location_id, movement_type, quantity,
-                reference_type, reference_id, reason, created_at, created_by
+                reference_type, reference_id, reason, created_at, created_by, tenant_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, get_current_tenant_id())
             "#,
             movement.id,
             movement.item_id,
@@ -53,8 +53,8 @@ impl PostgresStockRepository {
         // Update or insert stock level
         sqlx::query!(
             r#"
-            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, last_movement_id, updated_at)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, last_movement_id, updated_at, tenant_id)
+            VALUES ($1, $2, $3, $4, $5, get_current_tenant_id())
             ON CONFLICT (item_id, location_id)
             DO UPDATE SET
                 quantity_on_hand = stock_levels.quantity_on_hand + EXCLUDED.quantity_on_hand,
@@ -115,7 +115,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
-            WHERE item_id = $1 AND location_id = $2
+            WHERE item_id = $1 AND location_id = $2 AND tenant_id = get_current_tenant_id()
             "#,
             item_id,
             location_id
@@ -138,7 +138,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
-            WHERE item_id = $1
+            WHERE item_id = $1 AND tenant_id = get_current_tenant_id()
             ORDER BY location_id
             "#,
             item_id
@@ -167,7 +167,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
-            WHERE location_id = $1
+            WHERE location_id = $1 AND tenant_id = get_current_tenant_id()
             ORDER BY item_id
             "#,
             location_id
@@ -199,7 +199,7 @@ impl StockRepository for PostgresStockRepository {
             SELECT id, item_id, location_id, movement_type, quantity,
                    reference_type, reference_id, reason, created_at, created_by
             FROM stock_movements
-            WHERE item_id = $1
+            WHERE item_id = $1 AND tenant_id = get_current_tenant_id()
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -244,7 +244,7 @@ impl StockRepository for PostgresStockRepository {
             SELECT id, item_id, location_id, movement_type, quantity,
                    reference_type, reference_id, reason, created_at, created_by
             FROM stock_movements
-            WHERE location_id = $1
+            WHERE location_id = $1 AND tenant_id = get_current_tenant_id()
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -290,7 +290,7 @@ impl StockRepository for PostgresStockRepository {
             SELECT id, item_id, location_id, movement_type, quantity,
                    reference_type, reference_id, reason, created_at, created_by
             FROM stock_movements
-            WHERE item_id = $1 AND location_id = $2
+            WHERE item_id = $1 AND location_id = $2 AND tenant_id = get_current_tenant_id()
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -331,7 +331,7 @@ impl StockRepository for PostgresStockRepository {
             SELECT id, item_id, location_id, movement_type, quantity,
                    reference_type, reference_id, reason, created_at, created_by
             FROM stock_movements
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = get_current_tenant_id()
             "#,
             id
         )
@@ -366,7 +366,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT COALESCE(SUM(quantity_on_hand), 0) as total
             FROM stock_levels
-            WHERE item_id = $1
+            WHERE item_id = $1 AND tenant_id = get_current_tenant_id()
             "#,
             item_id
         )
@@ -384,8 +384,8 @@ impl StockRepository for PostgresStockRepository {
     ) -> Result<(), DomainError> {
         sqlx::query!(
             r#"
-            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, updated_at)
-            VALUES ($1, $2, 0, NOW())
+            INSERT INTO stock_levels (item_id, location_id, quantity_on_hand, updated_at, tenant_id)
+            VALUES ($1, $2, 0, NOW(), get_current_tenant_id())
             ON CONFLICT (item_id, location_id) DO NOTHING
             "#,
             item_id,
@@ -407,7 +407,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT EXISTS(
                 SELECT 1 FROM stock_levels
-                WHERE item_id = $1 AND location_id = $2
+                WHERE item_id = $1 AND location_id = $2 AND tenant_id = get_current_tenant_id()
             ) as exists
             "#,
             item_id,
@@ -435,7 +435,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
-            WHERE quantity_on_hand <= $1
+            WHERE quantity_on_hand <= $1 AND tenant_id = get_current_tenant_id()
             ORDER BY item_id, location_id
             LIMIT $2 OFFSET $3
             "#,
@@ -487,7 +487,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
-            WHERE location_id = $1
+            WHERE location_id = $1 AND tenant_id = get_current_tenant_id()
             ORDER BY item_id
             LIMIT $2 OFFSET $3
             "#,
@@ -538,6 +538,7 @@ impl StockRepository for PostgresStockRepository {
             r#"
             SELECT item_id, location_id, quantity_on_hand, last_movement_id, updated_at
             FROM stock_levels
+            WHERE tenant_id = get_current_tenant_id()
             ORDER BY item_id, location_id
             LIMIT $1 OFFSET $2
             "#,

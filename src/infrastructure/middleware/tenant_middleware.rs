@@ -49,17 +49,39 @@ impl TenantMiddleware {
     }
 
     pub async fn handle(&self, headers: HeaderMap, mut request: Request, next: Next) -> Response {
-        // Extract tenant_id from JWT token
+        // Extract tenant_id from JWT token or X-Tenant-ID header
         let tenant_id = match self.extract_tenant_from_token(&headers).await {
-            Ok(tenant_id) => tenant_id,
-            Err(_) => {
-                // For now, allow requests without authentication to proceed with default tenant
-                // In production, this should return 401 Unauthorized
-                Some(uuid::Uuid::parse_str("d60a7de9-1009-4606-aae9-ae6ffe5827aa").unwrap())
+            Ok(Some(tenant_id)) => Some(tenant_id),
+            _ => {
+                // Check for X-Tenant-ID header (for testing/development)
+                if let Some(tenant_header) = headers.get("x-tenant-id") {
+                    if let Ok(tenant_str) = tenant_header.to_str() {
+                        uuid::Uuid::parse_str(tenant_str).ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    // Default tenant for development
+                    Some(uuid::Uuid::parse_str("d60a7de9-1009-4606-aae9-ae6ffe5827aa").unwrap())
+                }
             }
         };
 
         if let Some(tenant_id) = tenant_id {
+            // Set tenant context in database session
+            if let Err(_) = sqlx::query("SELECT set_tenant_context($1)")
+                .bind(tenant_id)
+                .execute(&*self.pool)
+                .await
+            {
+                // If setting tenant context fails, return error
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to set tenant context",
+                )
+                    .into_response();
+            }
+
             // Look up tenant tier from database
             let tier = match self.tenant_repository.get_tenant_tier(tenant_id).await {
                 Ok(Some(tier)) => tier,

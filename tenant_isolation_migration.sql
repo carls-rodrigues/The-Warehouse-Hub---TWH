@@ -84,79 +84,79 @@ CREATE INDEX IF NOT EXISTS idx_webhooks_tenant_created_by ON webhooks(tenant_id,
 
 -- Items policy
 CREATE POLICY tenant_items_policy ON items
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (items.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Locations policy
 CREATE POLICY tenant_locations_policy ON locations
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (locations.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Stock movements policy
 CREATE POLICY tenant_stock_movements_policy ON stock_movements
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (stock_movements.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Stock levels policy
 CREATE POLICY tenant_stock_levels_policy ON stock_levels
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (stock_levels.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Purchase orders policy
 CREATE POLICY tenant_purchase_orders_policy ON purchase_orders
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (purchase_orders.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Purchase order lines policy
 CREATE POLICY tenant_purchase_order_lines_policy ON purchase_order_lines
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (purchase_order_lines.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Sales orders policy
 CREATE POLICY tenant_sales_orders_policy ON sales_orders
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (sales_orders.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Sales order lines policy
 CREATE POLICY tenant_sales_order_lines_policy ON sales_order_lines
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (sales_order_lines.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Transfers policy
 CREATE POLICY tenant_transfers_policy ON transfers
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (transfers.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Transfer lines policy
 CREATE POLICY tenant_transfer_lines_policy ON transfer_lines
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (transfer_lines.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Returns policy
 CREATE POLICY tenant_returns_policy ON returns
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (returns.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Return lines policy
 CREATE POLICY tenant_return_lines_policy ON return_lines
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (return_lines.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Webhooks policy
 CREATE POLICY tenant_webhooks_policy ON webhooks
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (webhooks.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Webhook events policy
 CREATE POLICY tenant_webhook_events_policy ON webhook_events
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (webhook_events.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Webhook deliveries policy
 CREATE POLICY tenant_webhook_deliveries_policy ON webhook_deliveries
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (webhook_deliveries.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Search indexes policy
 CREATE POLICY tenant_search_indexes_policy ON search_indexes
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (search_indexes.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Idempotency keys policy
 CREATE POLICY tenant_idempotency_keys_policy ON idempotency_keys
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (idempotency_keys.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Jobs policy (already has tenant_id)
 CREATE POLICY tenant_jobs_policy ON jobs
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (jobs.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Tenants policy - tenants can only see themselves (for API access)
 CREATE POLICY tenant_tenants_policy ON tenants
-    FOR ALL USING (id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (tenants.id = current_setting('custom.tenant_id')::UUID);
 
 -- Users policy - this might need special handling for cross-tenant users
 -- For now, allow all users to be visible (they might be shared across tenants)
@@ -202,7 +202,7 @@ ALTER TABLE tenant_quotas ENABLE ROW LEVEL SECURITY;
 
 -- Tenant quotas policy
 CREATE POLICY tenant_tenant_quotas_policy ON tenant_quotas
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (tenant_quotas.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Create indexes for tenant quotas
 CREATE INDEX IF NOT EXISTS idx_tenant_quotas_tenant_id ON tenant_quotas(tenant_id);
@@ -221,7 +221,7 @@ ALTER TABLE api_rate_limits ENABLE ROW LEVEL SECURITY;
 
 -- API rate limits policy
 CREATE POLICY tenant_api_rate_limits_policy ON api_rate_limits
-    FOR ALL USING (tenant_id = current_setting('app.tenant_id')::UUID);
+    FOR ALL USING (api_rate_limits.tenant_id = current_setting('custom.tenant_id')::UUID);
 
 -- Create indexes for API rate limits
 CREATE INDEX IF NOT EXISTS idx_api_rate_limits_tenant_endpoint ON api_rate_limits(tenant_id, endpoint);
@@ -272,39 +272,40 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION update_tenant_storage_usage()
 RETURNS TRIGGER AS $$
 DECLARE
-    tenant_id UUID;
+    current_tenant_id UUID;
     total_storage_bytes BIGINT := 0;
     items_storage BIGINT := 0;
     locations_storage BIGINT := 0;
     webhooks_storage BIGINT := 0;
 BEGIN
     -- Get the tenant_id from the operation
-    tenant_id := COALESCE(NEW.tenant_id, OLD.tenant_id);
+    current_tenant_id := COALESCE(NEW.tenant_id, OLD.tenant_id);
 
-    IF tenant_id IS NULL THEN
+    IF current_tenant_id IS NULL THEN
         RETURN COALESCE(NEW, OLD);
     END IF;
 
     -- Calculate storage usage for items (rough estimate: 1KB per item for metadata)
     SELECT COUNT(*) * 1024 INTO items_storage
     FROM items
-    WHERE tenant_id = tenant_id;
+    WHERE tenant_id = current_tenant_id;
 
     -- Calculate storage usage for locations (rough estimate: 512B per location)
     SELECT COUNT(*) * 512 INTO locations_storage
     FROM locations
-    WHERE tenant_id = tenant_id;
+    WHERE tenant_id = current_tenant_id;
 
     -- Calculate storage usage for webhooks (rough estimate: 2KB per webhook for config + events)
     SELECT COUNT(*) * 2048 INTO webhooks_storage
     FROM webhooks
-    WHERE tenant_id = tenant_id;
+    WHERE tenant_id = current_tenant_id;
 
     -- Add storage for webhook events (rough estimate: 1KB per event)
-    SELECT webhooks_storage + (COUNT(we.*) * 1024) INTO webhooks_storage
+    -- webhook_events are linked to webhooks via webhook_deliveries (deliveries reference both webhook_id and event_id)
+    SELECT webhooks_storage + (COUNT(wd.*) * 1024) INTO webhooks_storage
     FROM webhooks w
-    LEFT JOIN webhook_events we ON w.id = we.webhook_id
-    WHERE w.tenant_id = tenant_id;
+    LEFT JOIN webhook_deliveries wd ON w.id = wd.webhook_id
+    WHERE w.tenant_id = current_tenant_id;
 
     -- Calculate total storage in MB
     total_storage_bytes := items_storage + locations_storage + webhooks_storage;
@@ -314,7 +315,7 @@ BEGIN
     UPDATE tenant_quotas
     SET current_storage_mb = total_storage_bytes,
         updated_at = NOW()
-    WHERE tenant_id = tenant_id;
+    WHERE tenant_id = current_tenant_id;
 
     RETURN COALESCE(NEW, OLD);
 END;
@@ -326,19 +327,19 @@ RETURNS TRIGGER AS $$
 DECLARE
     quota_record RECORD;
     current_count INTEGER;
-    tenant_id UUID;
+    current_tenant_id UUID;
 BEGIN
-    -- Get tenant ID from session context
-    tenant_id := get_current_tenant_id();
+    -- Get tenant ID from the NEW record
+    current_tenant_id := NEW.tenant_id;
 
     -- Get tenant quota
     SELECT * INTO quota_record
     FROM tenant_quotas
-    WHERE tenant_id = tenant_id;
+    WHERE tenant_quotas.tenant_id = current_tenant_id;
 
     IF quota_record IS NULL THEN
         -- Create default quota if not exists
-        INSERT INTO tenant_quotas (tenant_id) VALUES (tenant_id);
+        INSERT INTO tenant_quotas (tenant_id) VALUES (current_tenant_id);
         RETURN NEW;
     END IF;
 
@@ -347,28 +348,28 @@ BEGIN
         WHEN 'items' THEN
             SELECT COUNT(*) INTO current_count
             FROM items i
-            WHERE i.tenant_id = tenant_id;
+            WHERE i.tenant_id = current_tenant_id;
 
             IF current_count >= quota_record.max_items THEN
-                RAISE EXCEPTION 'Item quota exceeded for tenant %', tenant_id;
+                RAISE EXCEPTION 'Item quota exceeded for tenant %', current_tenant_id;
             END IF;
 
         WHEN 'locations' THEN
             SELECT COUNT(*) INTO current_count
             FROM locations l
-            WHERE l.tenant_id = tenant_id;
+            WHERE l.tenant_id = current_tenant_id;
 
             IF current_count >= quota_record.max_locations THEN
-                RAISE EXCEPTION 'Location quota exceeded for tenant %', tenant_id;
+                RAISE EXCEPTION 'Location quota exceeded for tenant %', current_tenant_id;
             END IF;
 
         WHEN 'webhooks' THEN
             SELECT COUNT(*) INTO current_count
             FROM webhooks w
-            WHERE w.tenant_id = tenant_id;
+            WHERE w.tenant_id = current_tenant_id;
 
             IF current_count >= quota_record.max_webhooks THEN
-                RAISE EXCEPTION 'Webhook quota exceeded for tenant %', tenant_id;
+                RAISE EXCEPTION 'Webhook quota exceeded for tenant %', current_tenant_id;
             END IF;
     END CASE;
 
